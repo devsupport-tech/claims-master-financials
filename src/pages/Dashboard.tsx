@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -40,6 +39,8 @@ import {
   Pencil,
   Trash2,
   Home,
+  LayoutDashboard,
+  ExternalLink,
 } from 'lucide-react';
 import {
   ClaimForm,
@@ -49,6 +50,7 @@ import {
   JobCostForm,
 } from '@/components/forms';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { cn } from '@/lib/utils';
 import type { Claim, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
 
 export function Dashboard() {
@@ -309,272 +311,278 @@ export function Dashboard() {
   const { title: deleteTitle, description: deleteDescription } = getDeleteDescription();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <button className="flex items-center gap-3 hover:opacity-80 transition-opacity" onClick={() => setSelectedClaimId(null)}>
-              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div className="text-left">
-                <h1 className="text-xl font-bold">Claims Master Financials</h1>
-                <p className="text-sm text-muted-foreground">Insurance Claims Financial Management</p>
-              </div>
-            </button>
-            <div className="flex items-center gap-2">
-              {selectedClaimId && (
-                <Button variant="outline" size="sm" onClick={() => setSelectedClaimId(null)}>
-                  <Home className="h-4 w-4 mr-2" />
-                  Overview
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={() => { loadClaims(); loadOverview(); }} disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* ─── Sidebar ─── */}
+      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
+        {/* Branding */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
+              <DollarSign className="h-5 w-5" />
             </div>
+            <span className="whitespace-nowrap text-lg font-bold text-slate-50">Financials</span>
           </div>
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Sidebar - Claim Selection */}
-          <aside className="col-span-3 space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Select Claim</CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => { setEditingClaim(null); setShowClaimForm(true); }}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    New
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search claims..."
-                    className="pl-9"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                </div>
-
-                {/* Claims List */}
-                <div className="max-h-[500px] overflow-y-auto space-y-1">
-                  {isLoading ? (
-                    <div className="py-8 text-center text-muted-foreground">Loading claims...</div>
-                  ) : filteredClaims.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground">No claims found</div>
-                  ) : (
-                    filteredClaims.map(claim => (
-                      <div
-                        key={claim.id}
-                        className={`group relative w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
-                          selectedClaimId === claim.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-transparent hover:bg-muted'
-                        }`}
-                        onClick={() => setSelectedClaimId(claim.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-sm">{claim['Claim ID']}</div>
-                            <div className="text-xs text-muted-foreground">{claim['Last Name']}</div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => { e.stopPropagation(); handleEditClaim(claim); }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteClaim(claim); }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            {summary && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Quick Stats</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Reports</span>
-                    <Badge variant="secondary">{summary.adjusterReportCount}</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Releases</span>
-                    <Badge variant="secondary">{summary.mortgageReleaseCount}</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Pending Inspections</span>
-                    <Badge variant={summary.pendingInspections > 0 ? 'warning' : 'secondary'}>
-                      {summary.pendingInspections}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
+        {/* Nav Items */}
+        <nav className="shrink-0 space-y-1 px-3 py-4">
+          <a
+            href="https://vcwg004ccsc4kos0gck4os8c.restorationandremodeling.us/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+          >
+            <LayoutDashboard className="h-5 w-5" />
+            <span>Claims Master</span>
+            <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+          </a>
+          <button
+            onClick={() => setSelectedClaimId(null)}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              !selectedClaimId
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             )}
-          </aside>
+          >
+            <Home className="h-5 w-5" />
+            <span>Overview</span>
+          </button>
+          <button
+            onClick={() => { setEditingClaim(null); setShowClaimForm(true); }}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Claim</span>
+          </button>
+        </nav>
 
-          {/* Main Content */}
-          <main className="col-span-9 space-y-6">
-            {!selectedClaimId ? (
-              isLoadingOverview ? (
-                <Card className="py-16">
-                  <CardContent className="text-center">
-                    <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                    <p className="mt-4 text-muted-foreground">Loading overview...</p>
-                  </CardContent>
-                </Card>
-              ) : overview ? (
-                <PortfolioOverview data={overview} />
-              ) : (
-                <Card className="py-16">
-                  <CardContent className="text-center text-muted-foreground">
-                    Select a claim from the sidebar to view financial details
-                  </CardContent>
-                </Card>
-              )
-            ) : isLoadingDetails ? (
+        {/* Claims List */}
+        <div className="flex min-h-0 flex-1 flex-col border-t border-slate-800">
+          <div className="shrink-0 px-4 pb-2 pt-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Claims</span>
+          </div>
+          <div className="shrink-0 px-3 pb-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <input
+                placeholder="Search..."
+                className="w-full rounded-md border border-slate-700 bg-slate-800 py-1.5 pl-8 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-600"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
+            {isLoading ? (
+              <div className="py-6 text-center text-sm text-slate-500">Loading...</div>
+            ) : filteredClaims.length === 0 ? (
+              <div className="py-6 text-center text-sm text-slate-500">No claims found</div>
+            ) : (
+              filteredClaims.map((claim) => (
+                <div
+                  key={claim.id}
+                  className={cn(
+                    'group relative flex cursor-pointer items-center justify-between rounded-md px-3 py-2 transition-colors',
+                    selectedClaimId === claim.id
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                  )}
+                  onClick={() => setSelectedClaimId(claim.id)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{claim['Claim ID']}</div>
+                    <div className="truncate text-xs text-slate-500">{claim['Last Name']}</div>
+                  </div>
+                  <div className="ml-2 flex items-center gap-0.5">
+                    <button
+                      className="flex h-6 w-6 items-center justify-center rounded text-slate-400 opacity-0 transition-opacity hover:bg-slate-700 hover:text-white group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); handleEditClaim(claim); }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="flex h-6 w-6 items-center justify-center rounded text-rose-400 opacity-0 transition-opacity hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClaim(claim); }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Quick Stats - when claim selected */}
+        {summary && selectedClaimId && (
+          <div className="shrink-0 space-y-2 border-t border-slate-800 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Reports</span>
+              <span className="text-xs font-medium text-slate-200">{summary.adjusterReportCount}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Releases</span>
+              <span className="text-xs font-medium text-slate-200">{summary.mortgageReleaseCount}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Pending</span>
+              <span className={cn('text-xs font-medium', summary.pendingInspections > 0 ? 'text-amber-400' : 'text-slate-200')}>
+                {summary.pendingInspections}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom */}
+        <div className="shrink-0 border-t border-slate-800 p-3">
+          <button
+            onClick={() => { loadClaims(); loadOverview(); }}
+            disabled={isLoading}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-5 w-5', isLoading && 'animate-spin')} />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ─── Main Content ─── */}
+      <div className="flex-1 overflow-y-auto bg-muted/20">
+        <main className="mx-auto max-w-[92rem] p-4 md:p-8">
+          {!selectedClaimId ? (
+            isLoadingOverview ? (
               <Card className="py-16">
                 <CardContent className="text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                  <p className="mt-4 text-muted-foreground">Loading financial data...</p>
+                  <RefreshCw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="mt-4 text-muted-foreground">Loading overview...</p>
                 </CardContent>
               </Card>
+            ) : overview ? (
+              <PortfolioOverview data={overview} />
             ) : (
-              <>
-                {/* Claim Header */}
-                {selectedClaim && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
-                      <p className="text-muted-foreground">
-                        {selectedClaim['Last Name']}, {selectedClaim['First Name']} | {selectedClaim.Address}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-base px-3 py-1">
-                      {selectedClaim.Carrier}
-                    </Badge>
+              <Card className="py-16">
+                <CardContent className="text-center text-muted-foreground">
+                  Select a claim from the sidebar to view financial details
+                </CardContent>
+              </Card>
+            )
+          ) : isLoadingDetails ? (
+            <Card className="py-16">
+              <CardContent className="text-center">
+                <RefreshCw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="mt-4 text-muted-foreground">Loading financial data...</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {/* Claim Header */}
+              {selectedClaim && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
+                    <p className="text-muted-foreground">
+                      {selectedClaim['Last Name']}, {selectedClaim['First Name']} | {selectedClaim.Address}
+                    </p>
                   </div>
-                )}
+                  <Badge variant="outline" className="text-base px-3 py-1">
+                    {selectedClaim.Carrier}
+                  </Badge>
+                </div>
+              )}
 
-                {/* Financial Summary */}
-                {summary && <FinancialSummaryCard summary={summary} />}
+              {/* Financial Summary */}
+              {summary && <FinancialSummaryCard summary={summary} />}
 
-                {/* Tabbed Content */}
-                <Tabs defaultValue="ledger" className="space-y-4">
-                  <TabsList>
-                    <TabsTrigger value="ledger" className="flex items-center gap-2">
-                      <Receipt className="h-4 w-4" />
-                      Ledger
-                    </TabsTrigger>
-                    <TabsTrigger value="reports" className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Adjuster Reports
-                    </TabsTrigger>
-                    <TabsTrigger value="mortgage" className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      Mortgage
-                    </TabsTrigger>
-                    <TabsTrigger value="costing" className="flex items-center gap-2">
-                      <Wrench className="h-4 w-4" />
-                      Job Costing
-                    </TabsTrigger>
-                  </TabsList>
+              {/* Tabbed Content */}
+              <Tabs defaultValue="ledger" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="ledger" className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4" />
+                    Ledger
+                  </TabsTrigger>
+                  <TabsTrigger value="reports" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Adjuster Reports
+                  </TabsTrigger>
+                  <TabsTrigger value="mortgage" className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Mortgage
+                  </TabsTrigger>
+                  <TabsTrigger value="costing" className="flex items-center gap-2">
+                    <Wrench className="h-4 w-4" />
+                    Job Costing
+                  </TabsTrigger>
+                </TabsList>
 
-                  <TabsContent value="ledger">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => { setEditingLedger(null); setShowLedgerForm(true); }}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Entry
-                        </Button>
-                      </div>
-                      <FinancialLedger
-                        entries={ledger}
-                        onEdit={handleEditLedger}
-                        onDelete={handleDeleteLedger}
-                      />
+                <TabsContent value="ledger">
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={() => { setEditingLedger(null); setShowLedgerForm(true); }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Entry
+                      </Button>
                     </div>
-                  </TabsContent>
+                    <FinancialLedger
+                      entries={ledger}
+                      onEdit={handleEditLedger}
+                      onDelete={handleDeleteLedger}
+                    />
+                  </div>
+                </TabsContent>
 
-                  <TabsContent value="reports">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => { setEditingReport(null); setShowReportForm(true); }}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Report
-                        </Button>
-                      </div>
-                      <AdjusterReportsTracker
-                        reports={reports}
-                        onEdit={handleEditReport}
-                        onDelete={handleDeleteReport}
-                      />
+                <TabsContent value="reports">
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={() => { setEditingReport(null); setShowReportForm(true); }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Report
+                      </Button>
                     </div>
-                  </TabsContent>
+                    <AdjusterReportsTracker
+                      reports={reports}
+                      onEdit={handleEditReport}
+                      onDelete={handleDeleteReport}
+                    />
+                  </div>
+                </TabsContent>
 
-                  <TabsContent value="mortgage">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => { setEditingRelease(null); setShowReleaseForm(true); }}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Release
-                        </Button>
-                      </div>
-                      <MortgageReleaseTracker
-                        releases={releases}
-                        onEdit={handleEditRelease}
-                        onDelete={handleDeleteRelease}
-                      />
+                <TabsContent value="mortgage">
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={() => { setEditingRelease(null); setShowReleaseForm(true); }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Release
+                      </Button>
                     </div>
-                  </TabsContent>
+                    <MortgageReleaseTracker
+                      releases={releases}
+                      onEdit={handleEditRelease}
+                      onDelete={handleDeleteRelease}
+                    />
+                  </div>
+                </TabsContent>
 
-                  <TabsContent value="costing">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => { setEditingCost(null); setShowCostForm(true); }}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Cost
-                        </Button>
-                      </div>
-                      <JobCostingTable
-                        costs={costs}
-                        onEdit={handleEditCost}
-                        onDelete={handleDeleteCost}
-                      />
+                <TabsContent value="costing">
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={() => { setEditingCost(null); setShowCostForm(true); }}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Cost
+                      </Button>
                     </div>
-                  </TabsContent>
-                </Tabs>
-              </>
-            )}
-          </main>
-        </div>
+                    <JobCostingTable
+                      costs={costs}
+                      onEdit={handleEditCost}
+                      onDelete={handleDeleteCost}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </main>
       </div>
 
       {/* Form Dialogs */}
