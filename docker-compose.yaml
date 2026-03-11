@@ -8,5 +8,5 @@ services:
         VITE_AIRTABLE_BASE_ID: ${VITE_AIRTABLE_BASE_ID}
         VITE_APP_PASSWORD: ${VITE_APP_PASSWORD}
     ports:
-      - "8080:80"
+      - "5173:80"
     restart: unless-stopped
