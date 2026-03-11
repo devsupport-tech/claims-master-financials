@@ -10,6 +10,7 @@ import {
   MortgageReleaseTracker,
   FinancialLedger,
   JobCostingTable,
+  PortfolioOverview,
 } from '@/components/financial';
 import {
   getAllClaims,
@@ -23,7 +24,9 @@ import {
   deleteAdjusterReport,
   deleteMortgageRelease,
   deleteJobCost,
+  getPortfolioOverview,
 } from '@/lib/airtable';
+import type { PortfolioOverviewData } from '@/lib/airtable';
 import {
   DollarSign,
   FileText,
@@ -75,6 +78,10 @@ export function Dashboard() {
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Portfolio overview state
+  const [overview, setOverview] = useState<PortfolioOverviewData | null>(null);
+  const [isLoadingOverview, setIsLoadingOverview] = useState(true);
+
   // Financial data for selected claim
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -82,9 +89,10 @@ export function Dashboard() {
   const [releases, setReleases] = useState<MortgageRelease[]>([]);
   const [costs, setCosts] = useState<JobCost[]>([]);
 
-  // Load claims on mount
+  // Load claims + overview on mount
   useEffect(() => {
     loadClaims();
+    loadOverview();
   }, []);
 
   // Load claim details when selection changes
@@ -108,6 +116,18 @@ export function Dashboard() {
       console.error('Failed to load claims:', error);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function loadOverview() {
+    setIsLoadingOverview(true);
+    try {
+      const data = await getPortfolioOverview();
+      setOverview(data);
+    } catch (error) {
+      console.error('Failed to load overview:', error);
+    } finally {
+      setIsLoadingOverview(false);
     }
   }
 
@@ -138,10 +158,12 @@ export function Dashboard() {
   async function handleClaimCreated() {
     await loadClaims();
     if (selectedClaimId) await loadClaimDetails(selectedClaimId);
+    loadOverview();
   }
 
   async function handleDetailCreated() {
     if (selectedClaimId) await loadClaimDetails(selectedClaimId);
+    loadOverview();
   }
 
   // Edit handlers
@@ -415,11 +437,22 @@ export function Dashboard() {
           {/* Main Content */}
           <main className="col-span-9 space-y-6">
             {!selectedClaimId ? (
-              <Card className="py-16">
-                <CardContent className="text-center text-muted-foreground">
-                  Select a claim from the sidebar to view financial details
-                </CardContent>
-              </Card>
+              isLoadingOverview ? (
+                <Card className="py-16">
+                  <CardContent className="text-center">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                    <p className="mt-4 text-muted-foreground">Loading overview...</p>
+                  </CardContent>
+                </Card>
+              ) : overview ? (
+                <PortfolioOverview data={overview} />
+              ) : (
+                <Card className="py-16">
+                  <CardContent className="text-center text-muted-foreground">
+                    Select a claim from the sidebar to view financial details
+                  </CardContent>
+                </Card>
+              )
             ) : isLoadingDetails ? (
               <Card className="py-16">
                 <CardContent className="text-center">

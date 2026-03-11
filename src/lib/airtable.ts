@@ -288,3 +288,159 @@ export async function getClaimFinancialSummary(claimRecordId: string) {
     ).length,
   };
 }
+
+// ==========================================
+// PORTFOLIO OVERVIEW (ALL CLAIMS)
+// ==========================================
+
+export interface RecentActivity {
+  id: string;
+  type: 'Ledger' | 'Report' | 'Release' | 'Cost';
+  date: string;
+  name: string;
+  amount: number;
+  claimId: string;
+}
+
+export interface PortfolioOverviewData {
+  // Counts
+  totalClaims: number;
+  claimsByStatus: Record<string, number>;
+
+  // Financials
+  totalRCV: number;
+  totalACV: number;
+  totalReceived: number;
+  totalOutstanding: number;
+  grossProfit: number;
+  profitMargin: number;
+
+  // Job costing
+  totalBudget: number;
+  totalActualCosts: number;
+  totalVariance: number;
+  variancePercent: number;
+
+  // Recent activity
+  recentActivity: RecentActivity[];
+}
+
+export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
+  const [claims, ledger, reports, releases, costs] = await Promise.all([
+    getAllClaims(),
+    getFinancialLedger(),
+    getAdjusterReports(),
+    getMortgageReleases(),
+    getJobCosting(),
+  ]);
+
+  // Claim counts by status
+  const claimsByStatus: Record<string, number> = {};
+  claims.forEach((c: any) => {
+    const status = c.Status || 'Unknown';
+    claimsByStatus[status] = (claimsByStatus[status] || 0) + 1;
+  });
+
+  // Sum RCV/ACV from claims
+  const totalRCV = claims.reduce((sum: number, c: any) => sum + (c.RCV || 0), 0);
+  const totalACV = claims.reduce((sum: number, c: any) => sum + (c.ACV || 0), 0);
+
+  // Ledger totals
+  const totalInflows = ledger
+    .filter((e: any) => e.Direction === 'Inflow')
+    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+
+  const totalOutflows = ledger
+    .filter((e: any) => e.Direction === 'Outflow')
+    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+
+  // Job costing totals
+  const totalBudget = costs.reduce((sum: number, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
+  const totalActual = costs.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
+  const totalVariance = totalBudget - totalActual;
+
+  const totalOutstanding = totalACV - totalInflows;
+  const grossProfit = totalInflows - totalOutflows;
+
+  // Build claim ID lookup from linked records
+  const claimIdMap: Record<string, string> = {};
+  claims.forEach((c: any) => { claimIdMap[c.id] = c['Claim ID'] || '—'; });
+
+  function resolveClaimId(record: any): string {
+    const linked = record.Claim;
+    if (Array.isArray(linked) && linked.length > 0) {
+      return claimIdMap[linked[0]] || '—';
+    }
+    return '—';
+  }
+
+  // Build recent activity from all 4 types
+  const activity: RecentActivity[] = [];
+
+  ledger.forEach((e: any) => {
+    activity.push({
+      id: e.id,
+      type: 'Ledger',
+      date: e.Date || '',
+      name: e['Entry Name'] || e['Entry Type'] || '—',
+      amount: e.Amount || 0,
+      claimId: resolveClaimId(e),
+    });
+  });
+
+  reports.forEach((r: any) => {
+    activity.push({
+      id: r.id,
+      type: 'Report',
+      date: r['Report Date'] || '',
+      name: r['Report Name'] || r['Report Type'] || '—',
+      amount: r['RCV Amount'] || 0,
+      claimId: resolveClaimId(r),
+    });
+  });
+
+  releases.forEach((r: any) => {
+    activity.push({
+      id: r.id,
+      type: 'Release',
+      date: r['Request Date'] || '',
+      name: r['Release Name'] || `Release #${r['Release Number']}`,
+      amount: r['Release Amount'] || 0,
+      claimId: resolveClaimId(r),
+    });
+  });
+
+  costs.forEach((c: any) => {
+    activity.push({
+      id: c.id,
+      type: 'Cost',
+      date: c['Invoice Date'] || '',
+      name: c['Cost Name'] || c['Trade Category'] || '—',
+      amount: c['Actual Cost'] || c['Xactimate Budget'] || 0,
+      claimId: resolveClaimId(c),
+    });
+  });
+
+  // Sort by date descending, take top 10
+  activity.sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  return {
+    totalClaims: claims.length,
+    claimsByStatus,
+    totalRCV,
+    totalACV,
+    totalReceived: totalInflows,
+    totalOutstanding: Math.max(0, totalOutstanding),
+    grossProfit,
+    profitMargin: totalInflows > 0 ? (grossProfit / totalInflows) * 100 : 0,
+    totalBudget,
+    totalActualCosts: totalActual,
+    totalVariance,
+    variancePercent: totalBudget > 0 ? (totalVariance / totalBudget) * 100 : 0,
+    recentActivity: activity.slice(0, 10),
+  };
+}
