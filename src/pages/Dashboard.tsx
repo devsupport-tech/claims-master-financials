@@ -108,10 +108,7 @@ export function Dashboard() {
       const data = await getAllClaims();
       setClaims(data as Claim[]);
 
-      // Auto-select first claim if available
-      if (data.length > 0 && !selectedClaimId) {
-        setSelectedClaimId(data[0].id);
-      }
+      // Don't auto-select — show portfolio overview first
     } catch (error) {
       console.error('Failed to load claims:', error);
     } finally {
