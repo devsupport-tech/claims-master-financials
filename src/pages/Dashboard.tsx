@@ -39,6 +39,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Home,
 } from 'lucide-react';
 import {
   ClaimForm,
@@ -313,19 +314,27 @@ export function Dashboard() {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <button className="flex items-center gap-3 hover:opacity-80 transition-opacity" onClick={() => setSelectedClaimId(null)}>
               <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
                 <DollarSign className="h-6 w-6 text-primary-foreground" />
               </div>
-              <div>
+              <div className="text-left">
                 <h1 className="text-xl font-bold">Claims Master Financials</h1>
                 <p className="text-sm text-muted-foreground">Insurance Claims Financial Management</p>
               </div>
+            </button>
+            <div className="flex items-center gap-2">
+              {selectedClaimId && (
+                <Button variant="outline" size="sm" onClick={() => setSelectedClaimId(null)}>
+                  <Home className="h-4 w-4 mr-2" />
+                  Overview
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { loadClaims(); loadOverview(); }} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={loadClaims} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
           </div>
         </div>
       </header>
