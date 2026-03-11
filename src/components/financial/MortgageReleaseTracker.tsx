@@ -1,13 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Building2, CheckCircle, Clock, AlertCircle, Calendar } from 'lucide-react';
+import { Building2, CheckCircle, Clock, AlertCircle, Calendar, Pencil, Trash2 } from 'lucide-react';
 import type { MortgageRelease } from '@/types';
 
 interface MortgageReleaseTrackerProps {
   releases: MortgageRelease[];
+  onEdit?: (record: any) => void;
+  onDelete?: (record: any) => void;
 }
 
 const releaseStatusColors: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -29,7 +32,7 @@ const inspectionStatusColors: Record<string, 'default' | 'secondary' | 'success'
   'Failed': 'destructive',
 };
 
-export function MortgageReleaseTracker({ releases }: MortgageReleaseTrackerProps) {
+export function MortgageReleaseTracker({ releases, onEdit, onDelete }: MortgageReleaseTrackerProps) {
   if (releases.length === 0) {
     return (
       <Card>
@@ -114,6 +117,7 @@ export function MortgageReleaseTracker({ releases }: MortgageReleaseTrackerProps
               <TableHead>Inspection</TableHead>
               <TableHead>Completion</TableHead>
               <TableHead>Dates</TableHead>
+              {(onEdit || onDelete) && <TableHead className="w-[80px]">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -167,6 +171,22 @@ export function MortgageReleaseTracker({ releases }: MortgageReleaseTrackerProps
                     )}
                   </div>
                 </TableCell>
+                {(onEdit || onDelete) && (
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {onEdit && (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(release)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {onDelete && (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onDelete(release)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

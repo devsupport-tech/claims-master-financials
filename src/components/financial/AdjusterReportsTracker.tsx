@@ -1,12 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { FileText, TrendingUp, TrendingDown } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react';
 import type { AdjusterReport } from '@/types';
 
 interface AdjusterReportsTrackerProps {
   reports: AdjusterReport[];
+  onEdit?: (record: any) => void;
+  onDelete?: (record: any) => void;
 }
 
 const statusColors: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive'> = {
@@ -24,7 +27,7 @@ const reportTypeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
   'Final': 'default',
 };
 
-export function AdjusterReportsTracker({ reports }: AdjusterReportsTrackerProps) {
+export function AdjusterReportsTracker({ reports, onEdit, onDelete }: AdjusterReportsTrackerProps) {
   // Sort reports by version to show progression
   const sortedReports = [...reports].sort((a, b) => a.Version - b.Version);
 
@@ -63,6 +66,7 @@ export function AdjusterReportsTracker({ reports }: AdjusterReportsTrackerProps)
                 <TableHead className="text-right">ACV</TableHead>
                 <TableHead className="text-right">Change</TableHead>
                 <TableHead>Status</TableHead>
+                {(onEdit || onDelete) && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,6 +109,22 @@ export function AdjusterReportsTracker({ reports }: AdjusterReportsTrackerProps)
                         {report['Status']}
                       </Badge>
                     </TableCell>
+                    {(onEdit || onDelete) && (
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {onEdit && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(report)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {onDelete && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onDelete(report)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

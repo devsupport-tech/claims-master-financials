@@ -19,6 +19,11 @@ import {
   getAdjusterReports,
   getMortgageReleases,
   getJobCosting,
+  deleteClaim,
+  deleteLedgerEntry,
+  deleteAdjusterReport,
+  deleteMortgageRelease,
+  deleteJobCost,
 } from '@/lib/airtable';
 import {
   DollarSign,
@@ -29,7 +34,18 @@ import {
   RefreshCw,
   Search,
   ChevronRight,
+  Plus,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
+import {
+  ClaimForm,
+  LedgerEntryForm,
+  AdjusterReportForm,
+  MortgageReleaseForm,
+  JobCostForm,
+} from '@/components/forms';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { Claim, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
 
 export function Dashboard() {
@@ -38,6 +54,27 @@ export function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  // Form dialog states
+  const [showClaimForm, setShowClaimForm] = useState(false);
+  const [showLedgerForm, setShowLedgerForm] = useState(false);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [showReleaseForm, setShowReleaseForm] = useState(false);
+  const [showCostForm, setShowCostForm] = useState(false);
+
+  // Edit record states
+  const [editingClaim, setEditingClaim] = useState<any>(null);
+  const [editingLedger, setEditingLedger] = useState<any>(null);
+  const [editingReport, setEditingReport] = useState<any>(null);
+  const [editingRelease, setEditingRelease] = useState<any>(null);
+  const [editingCost, setEditingCost] = useState<any>(null);
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'claim' | 'ledger' | 'report' | 'release' | 'cost';
+    record: any;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Financial data for selected claim
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
@@ -98,6 +135,147 @@ export function Dashboard() {
     }
   }
 
+  // Refresh callbacks after form creation/edit
+  async function handleClaimCreated() {
+    await loadClaims();
+    if (selectedClaimId) await loadClaimDetails(selectedClaimId);
+  }
+
+  async function handleDetailCreated() {
+    if (selectedClaimId) await loadClaimDetails(selectedClaimId);
+  }
+
+  // Edit handlers
+  function handleEditClaim(record: any) {
+    setEditingClaim(record);
+    setShowClaimForm(true);
+  }
+
+  function handleEditLedger(record: any) {
+    setEditingLedger(record);
+    setShowLedgerForm(true);
+  }
+
+  function handleEditReport(record: any) {
+    setEditingReport(record);
+    setShowReportForm(true);
+  }
+
+  function handleEditRelease(record: any) {
+    setEditingRelease(record);
+    setShowReleaseForm(true);
+  }
+
+  function handleEditCost(record: any) {
+    setEditingCost(record);
+    setShowCostForm(true);
+  }
+
+  // Delete handlers
+  function handleDeleteLedger(record: any) {
+    setDeleteTarget({ type: 'ledger', record });
+  }
+
+  function handleDeleteReport(record: any) {
+    setDeleteTarget({ type: 'report', record });
+  }
+
+  function handleDeleteRelease(record: any) {
+    setDeleteTarget({ type: 'release', record });
+  }
+
+  function handleDeleteCost(record: any) {
+    setDeleteTarget({ type: 'cost', record });
+  }
+
+  function handleDeleteClaim(record: any) {
+    setDeleteTarget({ type: 'claim', record });
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      switch (deleteTarget.type) {
+        case 'claim':
+          await deleteClaim(deleteTarget.record.id);
+          setSelectedClaimId(null);
+          await loadClaims();
+          break;
+        case 'ledger':
+          await deleteLedgerEntry(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+        case 'report':
+          await deleteAdjusterReport(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+        case 'release':
+          await deleteMortgageRelease(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+        case 'cost':
+          await deleteJobCost(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Failed to delete:', err);
+      alert('Failed to delete record. Check the console for details.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  function getDeleteDescription(): { title: string; description: string } {
+    if (!deleteTarget) return { title: '', description: '' };
+    const name =
+      deleteTarget.record['Entry Name'] ||
+      deleteTarget.record['Report Name'] ||
+      deleteTarget.record['Release Name'] ||
+      deleteTarget.record['Cost Name'] ||
+      deleteTarget.record['Claim ID'] ||
+      'this record';
+    const typeLabel = {
+      claim: 'claim',
+      ledger: 'ledger entry',
+      report: 'adjuster report',
+      release: 'mortgage release',
+      cost: 'job cost',
+    }[deleteTarget.type];
+    return {
+      title: `Delete ${typeLabel}?`,
+      description: `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+    };
+  }
+
+  // Reset edit record when form closes
+  function handleClaimFormClose(open: boolean) {
+    setShowClaimForm(open);
+    if (!open) setEditingClaim(null);
+  }
+
+  function handleLedgerFormClose(open: boolean) {
+    setShowLedgerForm(open);
+    if (!open) setEditingLedger(null);
+  }
+
+  function handleReportFormClose(open: boolean) {
+    setShowReportForm(open);
+    if (!open) setEditingReport(null);
+  }
+
+  function handleReleaseFormClose(open: boolean) {
+    setShowReleaseForm(open);
+    if (!open) setEditingRelease(null);
+  }
+
+  function handleCostFormClose(open: boolean) {
+    setShowCostForm(open);
+    if (!open) setEditingCost(null);
+  }
+
   // Filter claims by search
   const filteredClaims = claims.filter(claim => {
     const query = searchQuery.toLowerCase();
@@ -109,6 +287,7 @@ export function Dashboard() {
   });
 
   const selectedClaim = claims.find(c => c.id === selectedClaimId);
+  const { title: deleteTitle, description: deleteDescription } = getDeleteDescription();
 
   return (
     <div className="min-h-screen bg-background">
@@ -139,7 +318,13 @@ export function Dashboard() {
           <aside className="col-span-3 space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Select Claim</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Select Claim</CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => { setEditingClaim(null); setShowClaimForm(true); }}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    New
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {/* Search */}
@@ -161,23 +346,41 @@ export function Dashboard() {
                     <div className="py-8 text-center text-muted-foreground">No claims found</div>
                   ) : (
                     filteredClaims.map(claim => (
-                      <button
+                      <div
                         key={claim.id}
-                        onClick={() => setSelectedClaimId(claim.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        className={`group relative w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
                           selectedClaimId === claim.id
                             ? 'border-primary bg-primary/5'
                             : 'border-transparent hover:bg-muted'
                         }`}
+                        onClick={() => setSelectedClaimId(claim.id)}
                       >
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="font-medium text-sm">{claim['Claim ID']}</div>
                             <div className="text-xs text-muted-foreground">{claim['Last Name']}</div>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => { e.stopPropagation(); handleEditClaim(claim); }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClaim(claim); }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
                         </div>
-                      </button>
+                      </div>
                     ))
                   )}
                 </div>
@@ -267,19 +470,67 @@ export function Dashboard() {
                   </TabsList>
 
                   <TabsContent value="ledger">
-                    <FinancialLedger entries={ledger} />
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => { setEditingLedger(null); setShowLedgerForm(true); }}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Entry
+                        </Button>
+                      </div>
+                      <FinancialLedger
+                        entries={ledger}
+                        onEdit={handleEditLedger}
+                        onDelete={handleDeleteLedger}
+                      />
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="reports">
-                    <AdjusterReportsTracker reports={reports} />
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => { setEditingReport(null); setShowReportForm(true); }}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Report
+                        </Button>
+                      </div>
+                      <AdjusterReportsTracker
+                        reports={reports}
+                        onEdit={handleEditReport}
+                        onDelete={handleDeleteReport}
+                      />
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="mortgage">
-                    <MortgageReleaseTracker releases={releases} />
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => { setEditingRelease(null); setShowReleaseForm(true); }}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Release
+                        </Button>
+                      </div>
+                      <MortgageReleaseTracker
+                        releases={releases}
+                        onEdit={handleEditRelease}
+                        onDelete={handleDeleteRelease}
+                      />
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="costing">
-                    <JobCostingTable costs={costs} />
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => { setEditingCost(null); setShowCostForm(true); }}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Cost
+                        </Button>
+                      </div>
+                      <JobCostingTable
+                        costs={costs}
+                        onEdit={handleEditCost}
+                        onDelete={handleDeleteCost}
+                      />
+                    </div>
                   </TabsContent>
                 </Tabs>
               </>
@@ -287,6 +538,58 @@ export function Dashboard() {
           </main>
         </div>
       </div>
+
+      {/* Form Dialogs */}
+      <ClaimForm
+        open={showClaimForm}
+        onOpenChange={handleClaimFormClose}
+        onSuccess={handleClaimCreated}
+        editRecord={editingClaim}
+      />
+
+      {selectedClaimId && (
+        <>
+          <LedgerEntryForm
+            open={showLedgerForm}
+            onOpenChange={handleLedgerFormClose}
+            claimRecordId={selectedClaimId}
+            onSuccess={handleDetailCreated}
+            editRecord={editingLedger}
+          />
+          <AdjusterReportForm
+            open={showReportForm}
+            onOpenChange={handleReportFormClose}
+            claimRecordId={selectedClaimId}
+            onSuccess={handleDetailCreated}
+            editRecord={editingReport}
+          />
+          <MortgageReleaseForm
+            open={showReleaseForm}
+            onOpenChange={handleReleaseFormClose}
+            claimRecordId={selectedClaimId}
+            onSuccess={handleDetailCreated}
+            editRecord={editingRelease}
+          />
+          <JobCostForm
+            open={showCostForm}
+            onOpenChange={handleCostFormClose}
+            claimRecordId={selectedClaimId}
+            onSuccess={handleDetailCreated}
+            editRecord={editingCost}
+          />
+        </>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={deleteTitle}
+        description={deleteDescription}
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

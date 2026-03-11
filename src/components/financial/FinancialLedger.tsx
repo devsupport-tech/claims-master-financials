@@ -4,11 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Receipt, ArrowUpCircle, ArrowDownCircle, Filter, CheckCircle } from 'lucide-react';
+import { Receipt, ArrowUpCircle, ArrowDownCircle, Filter, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 import type { LedgerEntry } from '@/types';
 
 interface FinancialLedgerProps {
   entries: LedgerEntry[];
+  onEdit?: (record: any) => void;
+  onDelete?: (record: any) => void;
 }
 
 const entryTypeColors: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -21,7 +23,7 @@ const entryTypeColors: Record<string, 'default' | 'secondary' | 'success' | 'war
 
 type FilterType = 'all' | 'inflow' | 'outflow';
 
-export function FinancialLedger({ entries }: FinancialLedgerProps) {
+export function FinancialLedger({ entries, onEdit, onDelete }: FinancialLedgerProps) {
   const [filter, setFilter] = useState<FilterType>('all');
 
   const filteredEntries = entries.filter(entry => {
@@ -110,6 +112,7 @@ export function FinancialLedger({ entries }: FinancialLedgerProps) {
                 <TableHead>Check #</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Reconciled</TableHead>
+                {(onEdit || onDelete) && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -151,6 +154,22 @@ export function FinancialLedger({ entries }: FinancialLedgerProps) {
                       <span className="text-xs text-muted-foreground">Pending</span>
                     )}
                   </TableCell>
+                  {(onEdit || onDelete) && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {onEdit && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(entry)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {onDelete && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onDelete(entry)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

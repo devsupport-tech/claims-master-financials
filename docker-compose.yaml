@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_AIRTABLE_API_KEY: ${VITE_AIRTABLE_API_KEY}
+        VITE_AIRTABLE_BASE_ID: ${VITE_AIRTABLE_BASE_ID}
+        VITE_APP_PASSWORD: ${VITE_APP_PASSWORD}
+    ports:
+      - "3000:80"
+    restart: unless-stopped

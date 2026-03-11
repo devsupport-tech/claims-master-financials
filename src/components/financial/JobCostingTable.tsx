@@ -1,13 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { formatCurrency, formatPercent } from '@/lib/utils';
-import { Wrench, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Wrench, TrendingUp, TrendingDown, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import type { JobCost } from '@/types';
 
 interface JobCostingTableProps {
   costs: JobCost[];
+  onEdit?: (record: any) => void;
+  onDelete?: (record: any) => void;
 }
 
 const paymentStatusColors: Record<string, 'default' | 'secondary' | 'success' | 'warning'> = {
@@ -17,7 +20,7 @@ const paymentStatusColors: Record<string, 'default' | 'secondary' | 'success' | 
   'Paid': 'success',
 };
 
-export function JobCostingTable({ costs }: JobCostingTableProps) {
+export function JobCostingTable({ costs, onEdit, onDelete }: JobCostingTableProps) {
   // Calculate totals
   const totalBudget = costs.reduce((sum, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
   const totalActual = costs.reduce((sum, c: any) => sum + (c['Actual Cost'] || 0), 0);
@@ -98,6 +101,7 @@ export function JobCostingTable({ costs }: JobCostingTableProps) {
                 <TableHead className="text-right">Variance</TableHead>
                 <TableHead>Progress</TableHead>
                 <TableHead>Payment</TableHead>
+                {(onEdit || onDelete) && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -142,6 +146,22 @@ export function JobCostingTable({ costs }: JobCostingTableProps) {
                         {cost['Payment Status']}
                       </Badge>
                     </TableCell>
+                    {(onEdit || onDelete) && (
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {onEdit && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(cost)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {onDelete && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => onDelete(cost)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -156,7 +176,7 @@ export function JobCostingTable({ costs }: JobCostingTableProps) {
                     {formatCurrency(totalVariance)}
                   </span>
                 </TableCell>
-                <TableCell colSpan={2}></TableCell>
+                <TableCell colSpan={(onEdit || onDelete) ? 3 : 2}></TableCell>
               </TableRow>
             </TableFooter>
           </Table>

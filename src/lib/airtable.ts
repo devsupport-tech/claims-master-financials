@@ -41,6 +41,20 @@ export async function getClaimByClaimId(claimId: string) {
   return { id: records[0].id, ...records[0].fields };
 }
 
+export async function createClaim(data: Record<string, any>) {
+  const record = await base(TABLES.CLAIMS).create(data);
+  return { id: record.id, ...record.fields };
+}
+
+export async function updateClaim(recordId: string, data: Record<string, any>) {
+  const record = await base(TABLES.CLAIMS).update(recordId, data);
+  return { id: record.id, ...record.fields };
+}
+
+export async function deleteClaim(recordId: string) {
+  await base(TABLES.CLAIMS).destroy(recordId);
+}
+
 // ==========================================
 // FINANCIAL LEDGER
 // ==========================================
@@ -69,6 +83,10 @@ export async function createLedgerEntry(data: Record<string, any>) {
 export async function updateLedgerEntry(recordId: string, data: Record<string, any>) {
   const record = await base(TABLES.FINANCIAL_LEDGER).update(recordId, data);
   return { id: record.id, ...record.fields };
+}
+
+export async function deleteLedgerEntry(recordId: string) {
+  await base(TABLES.FINANCIAL_LEDGER).destroy(recordId);
 }
 
 // ==========================================
@@ -101,6 +119,10 @@ export async function updateAdjusterReport(recordId: string, data: Record<string
   return { id: record.id, ...record.fields };
 }
 
+export async function deleteAdjusterReport(recordId: string) {
+  await base(TABLES.ADJUSTER_REPORTS).destroy(recordId);
+}
+
 // ==========================================
 // MORTGAGE RELEASES
 // ==========================================
@@ -131,6 +153,10 @@ export async function updateMortgageRelease(recordId: string, data: Record<strin
   return { id: record.id, ...record.fields };
 }
 
+export async function deleteMortgageRelease(recordId: string) {
+  await base(TABLES.MORTGAGE_RELEASES).destroy(recordId);
+}
+
 // ==========================================
 // JOB COSTING
 // ==========================================
@@ -159,6 +185,10 @@ export async function createJobCost(data: Record<string, any>) {
 export async function updateJobCost(recordId: string, data: Record<string, any>) {
   const record = await base(TABLES.JOB_COSTING).update(recordId, data);
   return { id: record.id, ...record.fields };
+}
+
+export async function deleteJobCost(recordId: string) {
+  await base(TABLES.JOB_COSTING).destroy(recordId);
 }
 
 // ==========================================
