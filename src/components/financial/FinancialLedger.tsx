@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Receipt, ArrowUpCircle, ArrowDownCircle, Filter, CheckCircle, Pencil, Trash2 } from 'lucide-react';
+import { Receipt, ArrowUpCircle, ArrowDownCircle, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 import type { LedgerEntry } from '@/types';
 
 interface FinancialLedgerProps {
