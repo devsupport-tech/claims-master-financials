@@ -41,6 +41,7 @@ import {
   Home,
   LayoutDashboard,
   ExternalLink,
+  HardHat,
 } from 'lucide-react';
 import {
   ClaimForm,
@@ -52,6 +53,9 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import type { Claim, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
+
+const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
+const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
 
 export function Dashboard() {
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -326,16 +330,30 @@ export function Dashboard() {
 
         {/* Nav Items */}
         <nav className="shrink-0 space-y-1 px-3 py-4">
-          <a
-            href="https://vcwg004ccsc4kos0gck4os8c.restorationandremodeling.us/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
-          >
-            <LayoutDashboard className="h-5 w-5" />
-            <span>Claims Master</span>
-            <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-          </a>
+          {CLAIMS_MASTER_URL && (
+            <a
+              href={CLAIMS_MASTER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+            >
+              <LayoutDashboard className="h-5 w-5" />
+              <span>Claims Master</span>
+              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+            </a>
+          )}
+          {RESTORATION_OPS_URL && (
+            <a
+              href={RESTORATION_OPS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+            >
+              <HardHat className="h-5 w-5" />
+              <span>Restoration Ops</span>
+              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+            </a>
+          )}
           <button
             onClick={() => setSelectedClaimId(null)}
             className={cn(
