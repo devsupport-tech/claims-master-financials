@@ -56,6 +56,7 @@ import type { Claim, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRele
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
+const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 
 export function Dashboard() {
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -324,7 +325,9 @@ export function Dashboard() {
             <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
               <DollarSign className="h-5 w-5" />
             </div>
-            <span className="whitespace-nowrap text-lg font-bold text-slate-50">Financials</span>
+            <span className="whitespace-nowrap text-lg font-bold text-slate-50">
+              Financials{BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}
+            </span>
           </div>
         </div>
 

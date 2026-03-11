@@ -9,6 +9,7 @@ services:
         VITE_APP_PASSWORD: ${VITE_APP_PASSWORD}
         VITE_LINK_CLAIMS_MASTER: ${VITE_LINK_CLAIMS_MASTER:-}
         VITE_LINK_RESTORATION_OPS: ${VITE_LINK_RESTORATION_OPS:-}
+        VITE_BRANDING_LABEL: ${VITE_BRANDING_LABEL:-}
     ports:
       - "5173:80"
     restart: unless-stopped
