@@ -10,15 +10,14 @@ import {
   FinancialLedger,
   JobCostingTable,
   PortfolioOverview,
+  ClaimsTable,
 } from '@/components/financial';
 import {
-  getAllClaims,
   getClaimFinancialSummary,
   getFinancialLedger,
   getAdjusterReports,
   getMortgageReleases,
   getJobCosting,
-  deleteClaim,
   deleteLedgerEntry,
   deleteAdjusterReport,
   deleteMortgageRelease,
@@ -26,6 +25,7 @@ import {
   getPortfolioOverview,
 } from '@/lib/airtable';
 import type { PortfolioOverviewData } from '@/lib/airtable';
+import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster } from '@/lib/claims-master';
 import {
   DollarSign,
   FileText,
@@ -33,18 +33,15 @@ import {
   Wrench,
   Receipt,
   RefreshCw,
-  Search,
-  ChevronRight,
   Plus,
-  Pencil,
-  Trash2,
   Home,
+  ArrowLeft,
   LayoutDashboard,
   ExternalLink,
   HardHat,
+  Users,
 } from 'lucide-react';
 import {
-  ClaimForm,
   LedgerEntryForm,
   AdjusterReportForm,
   MortgageReleaseForm,
@@ -52,28 +49,29 @@ import {
 } from '@/components/forms';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import type { Claim, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
+import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
 const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 
+type View = 'overview' | 'claims' | 'claim-detail';
+
 export function Dashboard() {
-  const [claims, setClaims] = useState<Claim[]>([]);
+  const [claims, setClaims] = useState<ClaimMaster[]>([]);
+  const [view, setView] = useState<View>('overview');
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [financialRecordId, setFinancialRecordId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   // Form dialog states
-  const [showClaimForm, setShowClaimForm] = useState(false);
   const [showLedgerForm, setShowLedgerForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [showCostForm, setShowCostForm] = useState(false);
 
   // Edit record states
-  const [editingClaim, setEditingClaim] = useState<any>(null);
   const [editingLedger, setEditingLedger] = useState<any>(null);
   const [editingReport, setEditingReport] = useState<any>(null);
   const [editingRelease, setEditingRelease] = useState<any>(null);
@@ -81,7 +79,7 @@ export function Dashboard() {
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'claim' | 'ledger' | 'report' | 'release' | 'cost';
+    type: 'ledger' | 'report' | 'release' | 'cost';
     record: any;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -99,40 +97,58 @@ export function Dashboard() {
 
   // Load claims + overview on mount
   useEffect(() => {
-    loadClaims();
-    loadOverview();
+    loadAll();
   }, []);
 
-  // Load claim details when selection changes
-  useEffect(() => {
-    if (selectedClaimId) {
-      loadClaimDetails(selectedClaimId);
-    }
-  }, [selectedClaimId]);
-
-  async function loadClaims() {
+  async function loadAll() {
     setIsLoading(true);
+    setIsLoadingOverview(true);
     try {
-      const data = await getAllClaims();
-      setClaims(data as Claim[]);
+      // Claims Master is the source of truth for all claim data
+      const claimsData = await getAllClaimsMaster();
+      setClaims(claimsData);
 
-      // Don't auto-select — show portfolio overview first
+      const overviewData = await getPortfolioOverview(claimsData);
+      setOverview(overviewData);
     } catch (error) {
-      console.error('Failed to load claims:', error);
+      console.error('Failed to load data:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingOverview(false);
     }
   }
 
-  async function loadOverview() {
-    setIsLoadingOverview(true);
+  async function handleSelectClaim(claim: ClaimMaster) {
+    setSelectedClaimId(claim.id);
+    setView('claim-detail');
+    setIsLoadingDetails(true);
     try {
-      const data = await getPortfolioOverview();
-      setOverview(data);
+      const finRecordId = await ensureFinancialClaimRecord(claim);
+      setFinancialRecordId(finRecordId);
+      await loadClaimDetails(finRecordId);
     } catch (error) {
-      console.error('Failed to load overview:', error);
+      console.error('Failed to select claim:', error);
     } finally {
-      setIsLoadingOverview(false);
+      setIsLoadingDetails(false);
+    }
+  }
+
+  // Ensure financial record exists before opening a form (retry if bridge failed on claim select)
+  async function ensureBridgeAndOpenForm(openFn: () => void) {
+    if (financialRecordId) {
+      openFn();
+      return;
+    }
+    const selectedClaim = claims.find(c => c.id === selectedClaimId);
+    if (!selectedClaim) return;
+    try {
+      const finRecordId = await ensureFinancialClaimRecord(selectedClaim);
+      setFinancialRecordId(finRecordId);
+      openFn();
+    } catch (error: any) {
+      console.error('Failed to bridge claim:', error);
+      const msg = error?.message || error?.error || String(error);
+      alert(`Could not connect to the financial database: ${msg}`);
     }
   }
 
@@ -159,24 +175,22 @@ export function Dashboard() {
     }
   }
 
-  // Refresh callbacks after form creation/edit
-  async function handleClaimCreated() {
-    await loadClaims();
-    if (selectedClaimId) await loadClaimDetails(selectedClaimId);
-    loadOverview();
-  }
-
   async function handleDetailCreated() {
-    if (selectedClaimId) await loadClaimDetails(selectedClaimId);
-    loadOverview();
+    if (financialRecordId) {
+      await loadClaimDetails(financialRecordId);
+
+      // Sync updated financial summary back to Claims Master
+      const selectedClaim = claims.find(c => c.id === selectedClaimId);
+      if (selectedClaim) {
+        const freshSummary = await getClaimFinancialSummary(financialRecordId);
+        syncFinancialSummaryToClaimsMaster(selectedClaim.id, freshSummary as FinancialSummary).catch(err =>
+          console.error('Failed to sync to Claims Master:', err)
+        );
+      }
+    }
   }
 
   // Edit handlers
-  function handleEditClaim(record: any) {
-    setEditingClaim(record);
-    setShowClaimForm(true);
-  }
-
   function handleEditLedger(record: any) {
     setEditingLedger(record);
     setShowLedgerForm(true);
@@ -214,20 +228,11 @@ export function Dashboard() {
     setDeleteTarget({ type: 'cost', record });
   }
 
-  function handleDeleteClaim(record: any) {
-    setDeleteTarget({ type: 'claim', record });
-  }
-
   async function confirmDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
       switch (deleteTarget.type) {
-        case 'claim':
-          await deleteClaim(deleteTarget.record.id);
-          setSelectedClaimId(null);
-          await loadClaims();
-          break;
         case 'ledger':
           await deleteLedgerEntry(deleteTarget.record.id);
           await handleDetailCreated();
@@ -261,10 +266,8 @@ export function Dashboard() {
       deleteTarget.record['Report Name'] ||
       deleteTarget.record['Release Name'] ||
       deleteTarget.record['Cost Name'] ||
-      deleteTarget.record['Claim ID'] ||
       'this record';
     const typeLabel = {
-      claim: 'claim',
       ledger: 'ledger entry',
       report: 'adjuster report',
       release: 'mortgage release',
@@ -277,11 +280,6 @@ export function Dashboard() {
   }
 
   // Reset edit record when form closes
-  function handleClaimFormClose(open: boolean) {
-    setShowClaimForm(open);
-    if (!open) setEditingClaim(null);
-  }
-
   function handleLedgerFormClose(open: boolean) {
     setShowLedgerForm(open);
     if (!open) setEditingLedger(null);
@@ -302,23 +300,13 @@ export function Dashboard() {
     if (!open) setEditingCost(null);
   }
 
-  // Filter claims by search
-  const filteredClaims = claims.filter(claim => {
-    const query = searchQuery.toLowerCase();
-    return (
-      (claim['Claim ID'] || '').toLowerCase().includes(query) ||
-      (claim['Last Name'] || '').toLowerCase().includes(query) ||
-      (claim.Address || '').toLowerCase().includes(query)
-    );
-  });
-
   const selectedClaim = claims.find(c => c.id === selectedClaimId);
   const { title: deleteTitle, description: deleteDescription } = getDeleteDescription();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* ─── Sidebar ─── */}
-      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
+      <aside className="flex w-48 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
         {/* Branding */}
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
           <div className="flex items-center gap-2 overflow-hidden">
@@ -332,7 +320,7 @@ export function Dashboard() {
         </div>
 
         {/* Nav Items */}
-        <nav className="shrink-0 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1 px-3 py-4">
           {CLAIMS_MASTER_URL && (
             <a
               href={CLAIMS_MASTER_URL}
@@ -358,10 +346,10 @@ export function Dashboard() {
             </a>
           )}
           <button
-            onClick={() => setSelectedClaimId(null)}
+            onClick={() => { setView('overview'); setSelectedClaimId(null); setFinancialRecordId(null); }}
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              !selectedClaimId
+              view === 'overview'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             )}
@@ -370,96 +358,23 @@ export function Dashboard() {
             <span>Overview</span>
           </button>
           <button
-            onClick={() => { setEditingClaim(null); setShowClaimForm(true); }}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+            onClick={() => { setView('claims'); setSelectedClaimId(null); setFinancialRecordId(null); }}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              view === 'claims' || view === 'claim-detail'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            )}
           >
-            <Plus className="h-5 w-5" />
-            <span>New Claim</span>
+            <Users className="h-5 w-5" />
+            <span>Claims</span>
           </button>
         </nav>
-
-        {/* Claims List */}
-        <div className="flex min-h-0 flex-1 flex-col border-t border-slate-800">
-          <div className="shrink-0 px-4 pb-2 pt-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Claims</span>
-          </div>
-          <div className="shrink-0 px-3 pb-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-              <input
-                placeholder="Search..."
-                className="w-full rounded-md border border-slate-700 bg-slate-800 py-1.5 pl-8 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-600"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
-            {isLoading ? (
-              <div className="py-6 text-center text-sm text-slate-500">Loading...</div>
-            ) : filteredClaims.length === 0 ? (
-              <div className="py-6 text-center text-sm text-slate-500">No claims found</div>
-            ) : (
-              filteredClaims.map((claim) => (
-                <div
-                  key={claim.id}
-                  className={cn(
-                    'group relative flex cursor-pointer items-center justify-between rounded-md px-3 py-2 transition-colors',
-                    selectedClaimId === claim.id
-                      ? 'bg-slate-800 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                  )}
-                  onClick={() => setSelectedClaimId(claim.id)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{claim['Claim ID']}</div>
-                    <div className="truncate text-xs text-slate-500">{claim['Last Name']}</div>
-                  </div>
-                  <div className="ml-2 flex items-center gap-0.5">
-                    <button
-                      className="flex h-6 w-6 items-center justify-center rounded text-slate-400 opacity-0 transition-opacity hover:bg-slate-700 hover:text-white group-hover:opacity-100"
-                      onClick={(e) => { e.stopPropagation(); handleEditClaim(claim); }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button
-                      className="flex h-6 w-6 items-center justify-center rounded text-rose-400 opacity-0 transition-opacity hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteClaim(claim); }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Quick Stats - when claim selected */}
-        {summary && selectedClaimId && (
-          <div className="shrink-0 space-y-2 border-t border-slate-800 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">Reports</span>
-              <span className="text-xs font-medium text-slate-200">{summary.adjusterReportCount}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">Releases</span>
-              <span className="text-xs font-medium text-slate-200">{summary.mortgageReleaseCount}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">Pending</span>
-              <span className={cn('text-xs font-medium', summary.pendingInspections > 0 ? 'text-amber-400' : 'text-slate-200')}>
-                {summary.pendingInspections}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Bottom */}
         <div className="shrink-0 border-t border-slate-800 p-3">
           <button
-            onClick={() => { loadClaims(); loadOverview(); }}
+            onClick={loadAll}
             disabled={isLoading}
             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white disabled:opacity-50"
           >
@@ -472,7 +387,8 @@ export function Dashboard() {
       {/* ─── Main Content ─── */}
       <div className="flex-1 overflow-y-auto bg-muted/20">
         <main className="mx-auto max-w-[92rem] p-4 md:p-8">
-          {!selectedClaimId ? (
+          {/* Overview View */}
+          {view === 'overview' && (
             isLoadingOverview ? (
               <Card className="py-16">
                 <CardContent className="text-center">
@@ -485,162 +401,180 @@ export function Dashboard() {
             ) : (
               <Card className="py-16">
                 <CardContent className="text-center text-muted-foreground">
-                  Select a claim from the sidebar to view financial details
+                  No data available yet
                 </CardContent>
               </Card>
             )
-          ) : isLoadingDetails ? (
-            <Card className="py-16">
-              <CardContent className="text-center">
-                <RefreshCw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="mt-4 text-muted-foreground">Loading financial data...</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {/* Claim Header */}
-              {selectedClaim && (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
-                    <p className="text-muted-foreground">
-                      {selectedClaim['Last Name']}, {selectedClaim['First Name']} | {selectedClaim.Address}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-base px-3 py-1">
-                    {selectedClaim.Carrier}
-                  </Badge>
-                </div>
-              )}
+          )}
 
-              {/* Financial Summary */}
-              {summary && <FinancialSummaryCard summary={summary} />}
+          {/* Claims Table View */}
+          {view === 'claims' && (
+            <ClaimsTable
+              claims={claims}
+              isLoading={isLoading}
+              onSelectClaim={handleSelectClaim}
+            />
+          )}
 
-              {/* Tabbed Content */}
-              <Tabs defaultValue="ledger" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="ledger" className="flex items-center gap-2">
-                    <Receipt className="h-4 w-4" />
-                    Ledger
-                  </TabsTrigger>
-                  <TabsTrigger value="reports" className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Adjuster Reports
-                  </TabsTrigger>
-                  <TabsTrigger value="mortgage" className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Mortgage
-                  </TabsTrigger>
-                  <TabsTrigger value="costing" className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4" />
-                    Job Costing
-                  </TabsTrigger>
-                </TabsList>
+          {/* Claim Detail View */}
+          {view === 'claim-detail' && (
+            isLoadingDetails ? (
+              <Card className="py-16">
+                <CardContent className="text-center">
+                  <RefreshCw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="mt-4 text-muted-foreground">Loading financial data...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {/* Back button */}
+                <Button variant="ghost" size="sm" onClick={() => { setView('claims'); setSelectedClaimId(null); setFinancialRecordId(null); }}>
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back to Claims
+                </Button>
 
-                <TabsContent value="ledger">
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button size="sm" onClick={() => { setEditingLedger(null); setShowLedgerForm(true); }}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Entry
-                      </Button>
+                {/* Claim Header */}
+                {selectedClaim && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
+                      <p className="text-muted-foreground">
+                        {selectedClaim['Last Name']}{selectedClaim['First Name'] ? `, ${selectedClaim['First Name']}` : ''} | {selectedClaim.Address}
+                      </p>
                     </div>
-                    <FinancialLedger
-                      entries={ledger}
-                      onEdit={handleEditLedger}
-                      onDelete={handleDeleteLedger}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="reports">
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button size="sm" onClick={() => { setEditingReport(null); setShowReportForm(true); }}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Report
-                      </Button>
+                    <div className="flex items-center gap-2">
+                      {selectedClaim.Stage && (
+                        <Badge variant="secondary">{selectedClaim.Stage}</Badge>
+                      )}
+                      <Badge variant="outline" className="text-base px-3 py-1">
+                        {selectedClaim.Carrier}
+                      </Badge>
                     </div>
-                    <AdjusterReportsTracker
-                      reports={reports}
-                      onEdit={handleEditReport}
-                      onDelete={handleDeleteReport}
-                    />
                   </div>
-                </TabsContent>
+                )}
 
-                <TabsContent value="mortgage">
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button size="sm" onClick={() => { setEditingRelease(null); setShowReleaseForm(true); }}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Release
-                      </Button>
-                    </div>
-                    <MortgageReleaseTracker
-                      releases={releases}
-                      onEdit={handleEditRelease}
-                      onDelete={handleDeleteRelease}
-                    />
-                  </div>
-                </TabsContent>
+                {/* Financial Summary */}
+                {summary && <FinancialSummaryCard summary={summary} />}
 
-                <TabsContent value="costing">
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button size="sm" onClick={() => { setEditingCost(null); setShowCostForm(true); }}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Cost
-                      </Button>
+                {/* Tabbed Content */}
+                <Tabs defaultValue="ledger" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="ledger" className="flex items-center gap-2">
+                      <Receipt className="h-4 w-4" />
+                      Ledger
+                    </TabsTrigger>
+                    <TabsTrigger value="reports" className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Adjuster Reports
+                    </TabsTrigger>
+                    <TabsTrigger value="mortgage" className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Mortgage
+                    </TabsTrigger>
+                    <TabsTrigger value="costing" className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4" />
+                      Job Costing
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="ledger">
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingLedger(null); setShowLedgerForm(true); })}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Entry
+                        </Button>
+                      </div>
+                      <FinancialLedger
+                        entries={ledger}
+                        onEdit={handleEditLedger}
+                        onDelete={handleDeleteLedger}
+                      />
                     </div>
-                    <JobCostingTable
-                      costs={costs}
-                      onEdit={handleEditCost}
-                      onDelete={handleDeleteCost}
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
+                  </TabsContent>
+
+                  <TabsContent value="reports">
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingReport(null); setShowReportForm(true); })}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Report
+                        </Button>
+                      </div>
+                      <AdjusterReportsTracker
+                        reports={reports}
+                        onEdit={handleEditReport}
+                        onDelete={handleDeleteReport}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="mortgage">
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingRelease(null); setShowReleaseForm(true); })}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Release
+                        </Button>
+                      </div>
+                      <MortgageReleaseTracker
+                        releases={releases}
+                        onEdit={handleEditRelease}
+                        onDelete={handleDeleteRelease}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="costing">
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingCost(null); setShowCostForm(true); })}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Cost
+                        </Button>
+                      </div>
+                      <JobCostingTable
+                        costs={costs}
+                        onEdit={handleEditCost}
+                        onDelete={handleDeleteCost}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )
           )}
         </main>
       </div>
 
-      {/* Form Dialogs */}
-      <ClaimForm
-        open={showClaimForm}
-        onOpenChange={handleClaimFormClose}
-        onSuccess={handleClaimCreated}
-        editRecord={editingClaim}
-      />
-
-      {selectedClaimId && (
+      {/* Form Dialogs — always render when in claim-detail view so ensureBridgeAndOpenForm can open them */}
+      {view === 'claim-detail' && (
         <>
           <LedgerEntryForm
             open={showLedgerForm}
             onOpenChange={handleLedgerFormClose}
-            claimRecordId={selectedClaimId}
+            claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingLedger}
           />
           <AdjusterReportForm
             open={showReportForm}
             onOpenChange={handleReportFormClose}
-            claimRecordId={selectedClaimId}
+            claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingReport}
           />
           <MortgageReleaseForm
             open={showReleaseForm}
             onOpenChange={handleReleaseFormClose}
-            claimRecordId={selectedClaimId}
+            claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingRelease}
           />
           <JobCostForm
             open={showCostForm}
             onOpenChange={handleCostFormClose}
-            claimRecordId={selectedClaimId}
+            claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingCost}
           />

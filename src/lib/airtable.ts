@@ -325,8 +325,9 @@ export interface PortfolioOverviewData {
   recentActivity: RecentActivity[];
 }
 
-export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
-  const [claims, ledger, reports, releases, costs] = await Promise.all([
+export async function getPortfolioOverview(claimsMasterData?: any[]): Promise<PortfolioOverviewData> {
+  // Financials base: needed for transaction details (ledger, costs) and claim ID resolution
+  const [financialClaims, ledger, reports, releases, costs] = await Promise.all([
     getAllClaims(),
     getFinancialLedger(),
     getAdjusterReports(),
@@ -334,37 +335,25 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     getJobCosting(),
   ]);
 
-  // Claim counts by status
-  const claimsByStatus: Record<string, number> = {};
-  claims.forEach((c: any) => {
-    const status = c.Status || 'Unknown';
-    claimsByStatus[status] = (claimsByStatus[status] || 0) + 1;
-  });
+  // ── Claims Master is the source of truth ──
+  const claims = claimsMasterData || [];
 
-  // Sum RCV/ACV from claims
-  const totalRCV = claims.reduce((sum: number, c: any) => sum + (c.RCV || 0), 0);
-  const totalACV = claims.reduce((sum: number, c: any) => sum + (c.ACV || 0), 0);
+  // Build a set of valid Claim IDs from Claims Master
+  const validClaimIds = new Set(claims.map((c: any) => c['Claim ID']).filter(Boolean));
 
-  // Ledger totals
-  const totalInflows = ledger
-    .filter((e: any) => e.Direction === 'Inflow')
-    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
-
-  const totalOutflows = ledger
-    .filter((e: any) => e.Direction === 'Outflow')
-    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
-
-  // Job costing totals
-  const totalBudget = costs.reduce((sum: number, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
-  const totalActual = costs.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
-  const totalVariance = totalBudget - totalActual;
-
-  const totalOutstanding = totalACV - totalInflows;
-  const grossProfit = totalInflows - totalOutflows;
-
-  // Build claim ID lookup from linked records
+  // Map financial base record IDs → Claim IDs (for filtering financial records)
   const claimIdMap: Record<string, string> = {};
-  claims.forEach((c: any) => { claimIdMap[c.id] = c['Claim ID'] || '—'; });
+  financialClaims.forEach((c: any) => { claimIdMap[c.id] = c['Claim ID'] || ''; });
+
+  // Only include financial records whose linked claim exists in Claims Master
+  function belongsToClaimsMaster(record: any): boolean {
+    const linked = record.Claim;
+    if (Array.isArray(linked) && linked.length > 0) {
+      const claimId = claimIdMap[linked[0]];
+      return claimId ? validClaimIds.has(claimId) : false;
+    }
+    return false;
+  }
 
   function resolveClaimId(record: any): string {
     const linked = record.Claim;
@@ -374,10 +363,43 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     return '—';
   }
 
-  // Build recent activity from all 4 types
+  // Filter all financial records to only Claims Master claims
+  const filteredLedger = ledger.filter(belongsToClaimsMaster);
+  const filteredReports = reports.filter(belongsToClaimsMaster);
+  const filteredReleases = releases.filter(belongsToClaimsMaster);
+  const filteredCosts = costs.filter(belongsToClaimsMaster);
+
+  // Claim counts & status from Claims Master
+  const claimsByStatus: Record<string, number> = {};
+  claims.forEach((c: any) => {
+    const status = c.Status || c.Stage || 'Unknown';
+    claimsByStatus[status] = (claimsByStatus[status] || 0) + 1;
+  });
+
+  // RCV/ACV from Claims Master
+  const totalRCV = claims.reduce((sum: number, c: any) => sum + (c.RCV || 0), 0);
+  const totalACV = claims.reduce((sum: number, c: any) => sum + (c.ACV || 0), 0);
+
+  // Total Received & Outstanding from Claims Master
+  const totalReceived = claims.reduce((sum: number, c: any) => sum + (c['Total Payout'] || 0), 0);
+  const totalOutstanding = claims.reduce((sum: number, c: any) => sum + (c['Total Outstanding Payments'] || 0), 0);
+
+  // ── Transaction-level data: only for Claims Master claims ──
+  const totalOutflows = filteredLedger
+    .filter((e: any) => e.Direction === 'Outflow')
+    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+
+  const grossProfit = totalReceived - totalOutflows;
+
+  // Job costing — only for Claims Master claims
+  const totalBudget = filteredCosts.reduce((sum: number, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
+  const totalActual = filteredCosts.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
+  const totalVariance = totalBudget - totalActual;
+
+  // ── Recently Updated: only for Claims Master claims ──
   const activity: RecentActivity[] = [];
 
-  ledger.forEach((e: any) => {
+  filteredLedger.forEach((e: any) => {
     activity.push({
       id: e.id,
       type: 'Ledger',
@@ -388,7 +410,7 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     });
   });
 
-  reports.forEach((r: any) => {
+  filteredReports.forEach((r: any) => {
     activity.push({
       id: r.id,
       type: 'Report',
@@ -399,7 +421,7 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     });
   });
 
-  releases.forEach((r: any) => {
+  filteredReleases.forEach((r: any) => {
     activity.push({
       id: r.id,
       type: 'Release',
@@ -410,7 +432,7 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     });
   });
 
-  costs.forEach((c: any) => {
+  filteredCosts.forEach((c: any) => {
     activity.push({
       id: c.id,
       type: 'Cost',
@@ -421,7 +443,6 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     });
   });
 
-  // Sort by date descending, take top 10
   activity.sort((a, b) => {
     if (!a.date) return 1;
     if (!b.date) return -1;
@@ -433,10 +454,10 @@ export async function getPortfolioOverview(): Promise<PortfolioOverviewData> {
     claimsByStatus,
     totalRCV,
     totalACV,
-    totalReceived: totalInflows,
+    totalReceived,
     totalOutstanding: Math.max(0, totalOutstanding),
     grossProfit,
-    profitMargin: totalInflows > 0 ? (grossProfit / totalInflows) * 100 : 0,
+    profitMargin: totalReceived > 0 ? (grossProfit / totalReceived) * 100 : 0,
     totalBudget,
     totalActualCosts: totalActual,
     totalVariance,

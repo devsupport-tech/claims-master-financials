@@ -17,6 +17,33 @@ export interface Claim {
   Status: string;
 }
 
+export interface ClaimMaster {
+  id: string;
+  'Claim ID': string;
+  'Last Name': string;
+  'First Name': string;
+  Address: string;
+  Carrier: string;
+  'Policy Number': string;
+  'Loss Date': string;
+  'Loss Type': string;
+  Status: string;
+  Stage: string;
+  RCV: number;
+  ACV: number;
+  Deductible: number;
+  'O&P': number;
+  Depreciation: number;
+  'Adjuster Name': string;
+  'Mortgage Company': string;
+  'Total Payout': number;
+  'Total Outstanding Payments': number;
+  'Net Claim Sum': number;
+  'Depreciation Recoverable': number;
+  'Total Approved Budget': number;
+  financialRecordId?: string;
+}
+
 export interface LedgerEntry {
   id: string;
   'Entry Name': string;
