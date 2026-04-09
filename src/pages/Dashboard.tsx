@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -34,14 +34,13 @@ import {
   Receipt,
   RefreshCw,
   Plus,
-  Home,
   ArrowLeft,
   LayoutDashboard,
-  ExternalLink,
-  HardHat,
-  Users,
+  ClipboardCheck,
+  Hammer,
   ChevronLeft,
   ChevronRight,
+  LogOut,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -61,9 +60,28 @@ const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 
 type View = 'overview' | 'claims' | 'claim-detail';
 
-export function Dashboard() {
+interface DashboardProps {
+  onLogout: () => void;
+  isDark: boolean;
+  onThemeToggle: () => void;
+}
+
+export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [isDark, setIsDark] = useState(false);
+
+  const titleText = `Financials${BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}`;
+  const logoSrc = BRANDING_LABEL ? `/logos/${BRANDING_LABEL.toLowerCase()}.png` : null;
+  const titleMeasureRef = useRef<HTMLSpanElement>(null);
+  const [expandedWidth, setExpandedWidth] = useState(224);
+
+  useEffect(() => {
+    if (titleMeasureRef.current) {
+      const textWidth = titleMeasureRef.current.scrollWidth;
+      const needed = textWidth + 120;
+      setExpandedWidth(Math.max(224, needed));
+    }
+  }, [titleText]);
+
   const [claims, setClaims] = useState<ClaimMaster[]>([]);
   const [view, setView] = useState<View>('overview');
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
@@ -311,34 +329,53 @@ export function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Hidden span to measure title width */}
+      <span
+        ref={titleMeasureRef}
+        className="pointer-events-none invisible fixed whitespace-nowrap text-lg font-bold"
+        aria-hidden="true"
+      >
+        {titleText}
+      </span>
+
       {/* ─── Sidebar ─── */}
       <aside
-        className="relative z-20 flex shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl transition-all duration-300 ease-in-out"
-        style={{ width: collapsed ? 56 : 224 }}
+        className="relative z-20 flex shrink-0 flex-col border-r border-[#1e293b] bg-[#0f172a] text-slate-100 shadow-xl transition-all duration-300 ease-in-out"
+        style={{ width: collapsed ? 56 : expandedWidth, '--color-border': '#1e293b' } as React.CSSProperties}
       >
         {/* Branding */}
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#1e293b] px-4">
           {!collapsed ? (
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
-                <DollarSign className="h-5 w-5" />
-              </div>
+              {logoSrc ? (
+                <img src={logoSrc} alt="Company logo" className="h-8 w-8 shrink-0 rounded object-contain" />
+              ) : (
+                <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+              )}
               <span className="whitespace-nowrap text-lg font-bold text-slate-50">
-                Financials{BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}
+                {titleText}
               </span>
             </div>
           ) : (
-            <div className="mx-auto shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
-              <DollarSign className="h-5 w-5" />
-            </div>
+            <>
+              {logoSrc ? (
+                <img src={logoSrc} alt="Company logo" className="mx-auto h-8 w-8 rounded object-contain" />
+              ) : (
+                <div className="mx-auto shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+              )}
+            </>
           )}
 
           <Button
             variant="ghost"
             size="icon"
             className={cn(
-              'h-8 w-8 text-slate-300 hover:bg-slate-800 hover:text-white',
-              collapsed ? 'absolute -right-4 top-12 rounded-full border border-slate-700 bg-slate-900 shadow-md' : ''
+              'h-8 w-8 text-slate-300 hover:bg-[#1e293b] hover:text-white',
+              collapsed ? 'absolute -right-4 top-12 rounded-full border border-[#334155] bg-[#0f172a] shadow-md' : ''
             )}
             onClick={() => setCollapsed((c) => !c)}
           >
@@ -347,96 +384,86 @@ export function Dashboard() {
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
+        <div className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
+          <Button
+            variant="ghost"
+            className={cn(
+              'w-full justify-start text-slate-300 hover:bg-[#1e293b]/80 hover:text-white',
+              collapsed ? 'justify-center px-0' : 'px-4',
+              view === 'overview' && 'bg-[#1e293b] text-white shadow-sm hover:bg-[#1e293b]'
+            )}
+            onClick={() => { setView('overview'); setSelectedClaimId(null); setFinancialRecordId(null); }}
+          >
+            <LayoutDashboard className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+            {!collapsed && <span>Overview</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            className={cn(
+              'w-full justify-start text-slate-300 hover:bg-[#1e293b]/80 hover:text-white',
+              collapsed ? 'justify-center px-0' : 'px-4',
+              (view === 'claims' || view === 'claim-detail') && 'bg-[#1e293b] text-white shadow-sm hover:bg-[#1e293b]'
+            )}
+            onClick={() => { setView('claims'); setSelectedClaimId(null); setFinancialRecordId(null); }}
+          >
+            <ClipboardCheck className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+            {!collapsed && <span>Claims</span>}
+          </Button>
           {CLAIMS_MASTER_URL && (
-            <a
-              href={CLAIMS_MASTER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="ghost"
               className={cn(
-                'flex items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white',
-                collapsed && 'justify-center px-0 gap-0'
+                'w-full justify-start text-slate-300 hover:bg-[#1e293b]/80 hover:text-white',
+                collapsed ? 'justify-center px-0' : 'px-4'
               )}
+              asChild
             >
-              <LayoutDashboard className="h-5 w-5 shrink-0" />
-              {!collapsed && (
-                <>
-                  <span>Claims Master</span>
-                  <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-                </>
-              )}
-            </a>
+              <a href={CLAIMS_MASTER_URL} target="_blank" rel="noopener noreferrer">
+                <FileText className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+                {!collapsed && <span>Claims Master</span>}
+              </a>
+            </Button>
           )}
           {RESTORATION_OPS_URL && (
-            <a
-              href={RESTORATION_OPS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="ghost"
               className={cn(
-                'flex items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white',
-                collapsed && 'justify-center px-0 gap-0'
+                'w-full justify-start text-slate-300 hover:bg-[#1e293b]/80 hover:text-white',
+                collapsed ? 'justify-center px-0' : 'px-4'
               )}
+              asChild
             >
-              <HardHat className="h-5 w-5 shrink-0" />
-              {!collapsed && (
-                <>
-                  <span>Restoration Ops</span>
-                  <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-                </>
-              )}
-            </a>
+              <a href={RESTORATION_OPS_URL} target="_blank" rel="noopener noreferrer">
+                <Hammer className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+                {!collapsed && <span>Restoration Ops</span>}
+              </a>
+            </Button>
           )}
-          <button
-            onClick={() => { setView('overview'); setSelectedClaimId(null); setFinancialRecordId(null); }}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-              collapsed && 'justify-center px-0 gap-0',
-              view === 'overview'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-            )}
-          >
-            <Home className="h-5 w-5 shrink-0" />
-            {!collapsed && <span>Overview</span>}
-          </button>
-          <button
-            onClick={() => { setView('claims'); setSelectedClaimId(null); setFinancialRecordId(null); }}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-              collapsed && 'justify-center px-0 gap-0',
-              view === 'claims' || view === 'claim-detail'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-            )}
-          >
-            <Users className="h-5 w-5 shrink-0" />
-            {!collapsed && <span>Claims</span>}
-          </button>
-        </nav>
+        </div>
 
         {/* Bottom */}
-        <div className="space-y-2 shrink-0 border-t border-slate-800 p-3">
+        <div className="space-y-2 shrink-0 border-t border-[#1e293b] p-3">
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-between px-2')}>
             {!collapsed && <span className="text-sm font-medium text-slate-300">Theme</span>}
             <button
-              onClick={() => { setIsDark(!isDark); document.documentElement.classList.toggle('dark'); }}
-              className="h-8 w-8 rounded-md text-slate-300 transition hover:bg-slate-800 hover:text-white inline-flex items-center justify-center"
+              onClick={onThemeToggle}
+              className="h-8 w-8 rounded-md text-slate-300 transition hover:bg-[#1e293b] hover:text-white inline-flex items-center justify-center"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
 
-          <button
-            onClick={loadAll}
-            disabled={isLoading}
+          <Button
+            variant="ghost"
             className={cn(
-              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white disabled:opacity-50',
-              collapsed && 'justify-center px-0 gap-0'
+              'w-full text-rose-300 hover:bg-rose-500/10 hover:text-rose-200',
+              collapsed ? 'justify-center px-0' : 'justify-start px-4'
             )}
+            onClick={onLogout}
           >
-            <RefreshCw className={cn('h-5 w-5 shrink-0', isLoading && 'animate-spin')} />
-            {!collapsed && <span>Refresh</span>}
-          </button>
+            <LogOut className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+            {!collapsed && <span>Logout</span>}
+          </Button>
         </div>
       </aside>
 

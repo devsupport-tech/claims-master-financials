@@ -1,30 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dashboard } from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import './index.css';
 
-const DASHBOARD_PASSWORD = import.meta.env.VITE_DASHBOARD_PASSWORD || '';
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (!DASHBOARD_PASSWORD) return true;
-    return sessionStorage.getItem('financials_auth') === 'true';
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    if (stored) return stored === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const handleLogin = (password: string): boolean => {
-    if (!DASHBOARD_PASSWORD || password === DASHBOARD_PASSWORD) {
+  useEffect(() => {
+    const auth = sessionStorage.getItem('authenticated');
+    if (auth === 'true') {
       setIsAuthenticated(true);
-      sessionStorage.setItem('financials_auth', 'true');
+    }
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
+
+  const handleLogin = (password: string): boolean => {
+    if (password === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('authenticated', 'true');
       return true;
     }
     return false;
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('authenticated');
   };
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
 
-  return <Dashboard />;
+  return (
+    <Dashboard
+      onLogout={handleLogout}
+      isDark={isDark}
+      onThemeToggle={() => setIsDark((d) => !d)}
+    />
+  );
 }
 
 export default App;
