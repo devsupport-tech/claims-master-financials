@@ -40,6 +40,10 @@ import {
   ExternalLink,
   HardHat,
   Users,
+  ChevronLeft,
+  ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
@@ -58,6 +62,8 @@ const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 type View = 'overview' | 'claims' | 'claim-detail';
 
 export function Dashboard() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const [claims, setClaims] = useState<ClaimMaster[]>([]);
   const [view, setView] = useState<View>('overview');
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
@@ -306,31 +312,59 @@ export function Dashboard() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* ─── Sidebar ─── */}
-      <aside className="flex w-48 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
+      <aside
+        className="relative z-20 flex shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-100 shadow-xl transition-all duration-300 ease-in-out"
+        style={{ width: collapsed ? 56 : 224 }}
+      >
         {/* Branding */}
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
+          {!collapsed ? (
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
+                <DollarSign className="h-5 w-5" />
+              </div>
+              <span className="whitespace-nowrap text-lg font-bold text-slate-50">
+                Financials{BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}
+              </span>
+            </div>
+          ) : (
+            <div className="mx-auto shrink-0 rounded bg-slate-100 p-1.5 text-slate-900">
               <DollarSign className="h-5 w-5" />
             </div>
-            <span className="whitespace-nowrap text-lg font-bold text-slate-50">
-              Financials{BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}
-            </span>
-          </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-8 w-8 text-slate-300 hover:bg-slate-800 hover:text-white',
+              collapsed ? 'absolute -right-4 top-12 rounded-full border border-slate-700 bg-slate-900 shadow-md' : ''
+            )}
+            onClick={() => setCollapsed((c) => !c)}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
           {CLAIMS_MASTER_URL && (
             <a
               href={CLAIMS_MASTER_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+              className={cn(
+                'flex items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white',
+                collapsed && 'justify-center px-0 gap-0'
+              )}
             >
-              <LayoutDashboard className="h-5 w-5" />
-              <span>Claims Master</span>
-              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+              <LayoutDashboard className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span>Claims Master</span>
+                  <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+                </>
+              )}
             </a>
           )}
           {RESTORATION_OPS_URL && (
@@ -338,48 +372,70 @@ export function Dashboard() {
               href={RESTORATION_OPS_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white"
+              className={cn(
+                'flex items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white',
+                collapsed && 'justify-center px-0 gap-0'
+              )}
             >
-              <HardHat className="h-5 w-5" />
-              <span>Restoration Ops</span>
-              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+              <HardHat className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span>Restoration Ops</span>
+                  <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+                </>
+              )}
             </a>
           )}
           <button
             onClick={() => { setView('overview'); setSelectedClaimId(null); setFinancialRecordId(null); }}
             className={cn(
-              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              collapsed && 'justify-center px-0 gap-0',
               view === 'overview'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             )}
           >
-            <Home className="h-5 w-5" />
-            <span>Overview</span>
+            <Home className="h-5 w-5 shrink-0" />
+            {!collapsed && <span>Overview</span>}
           </button>
           <button
             onClick={() => { setView('claims'); setSelectedClaimId(null); setFinancialRecordId(null); }}
             className={cn(
-              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              collapsed && 'justify-center px-0 gap-0',
               view === 'claims' || view === 'claim-detail'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             )}
           >
-            <Users className="h-5 w-5" />
-            <span>Claims</span>
+            <Users className="h-5 w-5 shrink-0" />
+            {!collapsed && <span>Claims</span>}
           </button>
         </nav>
 
         {/* Bottom */}
-        <div className="shrink-0 border-t border-slate-800 p-3">
+        <div className="space-y-2 shrink-0 border-t border-slate-800 p-3">
+          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-between px-2')}>
+            {!collapsed && <span className="text-sm font-medium text-slate-300">Theme</span>}
+            <button
+              onClick={() => { setIsDark(!isDark); document.documentElement.classList.toggle('dark'); }}
+              className="h-8 w-8 rounded-md text-slate-300 transition hover:bg-slate-800 hover:text-white inline-flex items-center justify-center"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
+
           <button
             onClick={loadAll}
             disabled={isLoading}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white disabled:opacity-50"
+            className={cn(
+              'flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white disabled:opacity-50',
+              collapsed && 'justify-center px-0 gap-0'
+            )}
           >
-            <RefreshCw className={cn('h-5 w-5', isLoading && 'animate-spin')} />
-            <span>Refresh</span>
+            <RefreshCw className={cn('h-5 w-5 shrink-0', isLoading && 'animate-spin')} />
+            {!collapsed && <span>Refresh</span>}
           </button>
         </div>
       </aside>

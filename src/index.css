@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -7,7 +8,9 @@
   --color-foreground: hsl(222.2 84% 4.9%);
   --color-card: hsl(0 0% 100%);
   --color-card-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(221.2 83.2% 53.3%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222.2 84% 4.9%);
+  --color-primary: hsl(222.2 47.4% 11.2%);
   --color-primary-foreground: hsl(210 40% 98%);
   --color-secondary: hsl(210 40% 96.1%);
   --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
@@ -19,9 +22,14 @@
   --color-destructive-foreground: hsl(210 40% 98%);
   --color-border: hsl(214.3 31.8% 91.4%);
   --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(221.2 83.2% 53.3%);
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222.2 84% 4.9%);
+  --color-ring: hsl(222.2 47.4% 11.2%);
+
+  --color-success: hsl(152 82% 36%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(30 80% 15%);
+  --color-info: hsl(199 89% 48%);
+  --color-info-foreground: hsl(0 0% 100%);
 }
 
 @layer base {
@@ -30,9 +38,71 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     margin: 0;
   }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='month'],
+  input[type='time'] {
+    color-scheme: light;
+  }
+
+  .dark input[type='date'],
+  .dark input[type='datetime-local'],
+  .dark input[type='month'],
+  .dark input[type='time'] {
+    color-scheme: dark !important;
+  }
+
+  .dark input[type='date']::-webkit-calendar-picker-indicator,
+  .dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
+  .dark input[type='month']::-webkit-calendar-picker-indicator,
+  .dark input[type='time']::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 1 !important;
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+    -webkit-filter: invert(1) grayscale(1) brightness(220%) contrast(180%) !important;
+    filter: invert(1) grayscale(1) brightness(220%) contrast(180%) !important;
+  }
+}
+
+.dark {
+  --color-background: hsl(222.2 84% 4.9%);
+  --color-foreground: hsl(210 40% 98%);
+  --color-card: hsl(222.2 84% 4.9%);
+  --color-card-foreground: hsl(210 40% 98%);
+  --color-popover: hsl(222.2 84% 4.9%);
+  --color-popover-foreground: hsl(210 40% 98%);
+  --color-primary: hsl(210 40% 98%);
+  --color-primary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-secondary: hsl(217.2 32.6% 17.5%);
+  --color-secondary-foreground: hsl(210 40% 98%);
+  --color-muted: hsl(217.2 32.6% 17.5%);
+  --color-muted-foreground: hsl(215 20.2% 65.1%);
+  --color-accent: hsl(217.2 32.6% 17.5%);
+  --color-accent-foreground: hsl(210 40% 98%);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-border: hsl(217.2 32.6% 17.5%);
+  --color-input: hsl(217.2 32.6% 17.5%);
+  --color-ring: hsl(210 40% 98%);
+  --color-success: hsl(152 70% 45%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(38 90% 55%);
+  --color-warning-foreground: hsl(38 10% 90%);
+  --color-info: hsl(199 85% 60%);
+  --color-info-foreground: hsl(0 0% 100%);
 }
 
 /* Custom scrollbar */
@@ -53,4 +123,52 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--color-muted-foreground) 50%, transparent);
+}
+
+/* Animations */
+@layer utilities {
+  @keyframes claim-content-exit {
+    from {
+      opacity: 1;
+      transform: translateY(0px) scale(1);
+      filter: blur(0px);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(12px) scale(0.99);
+      filter: blur(4px);
+    }
+  }
+
+  @keyframes claim-content-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.99);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0px) scale(1);
+      filter: blur(0px);
+    }
+  }
+
+  .claim-content-exit {
+    animation: claim-content-exit 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .claim-content-enter {
+    animation: claim-content-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .claim-content-exit,
+    .claim-content-enter {
+      animation-duration: 1ms !important;
+      animation-delay: 0ms !important;
+      transform: none !important;
+      filter: none !important;
+      opacity: 1 !important;
+    }
+  }
 }
