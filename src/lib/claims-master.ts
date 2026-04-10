@@ -39,6 +39,7 @@ export async function getAllClaimsMaster(): Promise<ClaimMaster[]> {
     'Net Claim Sum': (record.fields['Net Claim Sum'] as number) || 0,
     'Depreciation Recoverable': (record.fields['Depreciation Recoverable'] as number) || 0,
     'Total Approved Budget': (record.fields['Total Approved Budget'] as number) || 0,
+    Checklist: (record.fields['Checklist'] as string) || '',
   }));
 }
 
@@ -87,6 +88,26 @@ export async function ensureFinancialClaimRecord(claim: ClaimMaster): Promise<st
     console.error('Bridge create failed for Claim ID:', claim['Claim ID'], createErr?.message || createErr);
     throw createErr;
   }
+}
+
+/**
+ * Read the Checklist JSON string from a Claims Master record.
+ */
+export async function getClaimChecklist(claimsMasterRecordId: string): Promise<string> {
+  const record = await claimsMasterBase(TABLE_NAME).find(claimsMasterRecordId);
+  return (record.fields['Checklist'] as string) || '';
+}
+
+/**
+ * Write the Checklist JSON string to a Claims Master record.
+ */
+export async function updateClaimChecklist(
+  claimsMasterRecordId: string,
+  checklistJson: string
+): Promise<void> {
+  await claimsMasterBase(TABLE_NAME).update(claimsMasterRecordId, {
+    Checklist: checklistJson,
+  });
 }
 
 /**

@@ -5,3 +5,4 @@ export { FinancialLedger } from './FinancialLedger';
 export { JobCostingTable } from './JobCostingTable';
 export { PortfolioOverview } from './PortfolioOverview';
 export { ClaimsTable } from './ClaimsTable';
+export { InsuranceSubmissionTracker } from './InsuranceSubmissionTracker';

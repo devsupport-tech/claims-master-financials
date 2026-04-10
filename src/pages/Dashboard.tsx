@@ -11,6 +11,7 @@ import {
   JobCostingTable,
   PortfolioOverview,
   ClaimsTable,
+  InsuranceSubmissionTracker,
 } from '@/components/financial';
 import {
   getClaimFinancialSummary,
@@ -43,6 +44,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
@@ -558,6 +560,10 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                       <Wrench className="h-4 w-4" />
                       Job Costing
                     </TabsTrigger>
+                    <TabsTrigger value="submissions" className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Submissions
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="ledger">
@@ -622,6 +628,10 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                         onDelete={handleDeleteCost}
                       />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="submissions">
+                    <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />
                   </TabsContent>
                 </Tabs>
               </div>

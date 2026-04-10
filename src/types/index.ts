@@ -41,7 +41,35 @@ export interface ClaimMaster {
   'Net Claim Sum': number;
   'Depreciation Recoverable': number;
   'Total Approved Budget': number;
+  Checklist?: string;
   financialRecordId?: string;
+}
+
+// Insurance Submission Checklist types
+export type InsuranceSubmissionChecklistKey =
+  | 'mitigation'
+  | 'rebuild'
+  | 'packout'
+  | 'packIn'
+  | 'supplement'
+  | 'finalReport'
+  | 'invoiceReceipt';
+
+export interface InsuranceSubmissionChecklistItem {
+  key: InsuranceSubmissionChecklistKey;
+  label: string;
+  submitted: boolean;
+  submittedDate?: string;
+  amount?: number;
+  amountReleased?: number;
+  releaseDate?: string;
+  notes?: string;
+}
+
+export interface InsuranceSubmissionChecklist {
+  items: InsuranceSubmissionChecklistItem[];
+  totalSubmittedAmount: number;
+  lastUpdatedAt?: string;
 }
 
 export interface LedgerEntry {
