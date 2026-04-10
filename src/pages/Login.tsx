@@ -6,6 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
+const COMPANY_LOGO = import.meta.env.VITE_COMPANY_LOGO || '';
+const logoSrc = COMPANY_LOGO
+  ? COMPANY_LOGO.startsWith('http://') || COMPANY_LOGO.startsWith('https://')
+    ? COMPANY_LOGO
+    : `/logos/${COMPANY_LOGO}`
+  : BRANDING_LABEL
+    ? `/logos/${BRANDING_LABEL.toLowerCase()}.png`
+    : null;
 
 interface LoginProps {
   onLogin: (password: string) => boolean;
@@ -55,9 +63,13 @@ export default function Login({ onLogin }: LoginProps) {
         <Card className="w-full shadow-xl">
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center mb-4">
-              <div className="rounded-full bg-primary/10 p-4">
-                <Lock className="w-8 h-8 text-primary" />
-              </div>
+              {logoSrc ? (
+                <img src={logoSrc} alt="Company logo" className="h-16 w-16 rounded-full object-contain" />
+              ) : (
+                <div className="rounded-full bg-primary/10 p-4">
+                  <Lock className="w-8 h-8 text-primary" />
+                </div>
+              )}
             </div>
             <CardTitle className="text-2xl">{titleText}</CardTitle>
             <CardDescription>Enter password to access</CardDescription>
