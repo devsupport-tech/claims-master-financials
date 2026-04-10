@@ -631,7 +631,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                   </TabsContent>
 
                   <TabsContent value="submissions">
-                    <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />
+                    {selectedClaim && <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />}
                   </TabsContent>
                 </Tabs>
               </div>

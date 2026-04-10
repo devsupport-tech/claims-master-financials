@@ -178,8 +178,8 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
                   <TableCell>
                     <Checkbox
                       checked={item.submitted}
-                      onCheckedChange={(checked) =>
-                        updateChecklistItem(item.key, 'submitted', Boolean(checked))
+                      onChange={(e) =>
+                        updateChecklistItem(item.key, 'submitted', (e.target as HTMLInputElement).checked)
                       }
                     />
                   </TableCell>

@@ -66,9 +66,9 @@ export function JobCostForm({ open, onOpenChange, claimRecordId, onSuccess, edit
     if (!form['Cost Name'].trim()) e['Cost Name'] = 'Cost name is required'
     if (!form['Trade Category'].trim()) e['Trade Category'] = 'Trade category is required'
     if (!form['Vendor/Subcontractor'].trim()) e['Vendor/Subcontractor'] = 'Vendor is required'
-    if (form['Xactimate Budget'] < 0) e['Xactimate Budget'] = 'Budget cannot be negative'
+    if (Number(form['Xactimate Budget']) < 0) e['Xactimate Budget'] = 'Budget cannot be negative'
     if (!form['Xactimate Budget']) e['Xactimate Budget'] = 'Budget is required'
-    if (form['Actual Cost'] < 0) e['Actual Cost'] = 'Cost cannot be negative'
+    if (Number(form['Actual Cost']) < 0) e['Actual Cost'] = 'Cost cannot be negative'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -78,8 +78,8 @@ export function JobCostForm({ open, onOpenChange, claimRecordId, onSuccess, edit
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const budget = form['Xactimate Budget'] || 0
-      const actual = form['Actual Cost'] || 0
+      const budget = Number(form['Xactimate Budget']) || 0
+      const actual = Number(form['Actual Cost']) || 0
       const variance = budget - actual
       const variancePercent = budget > 0 ? variance / budget : 0
 
@@ -116,7 +116,7 @@ export function JobCostForm({ open, onOpenChange, claimRecordId, onSuccess, edit
     return errors[field] ? 'border-red-500 focus-visible:ring-red-500' : ''
   }
 
-  const variance = (form['Xactimate Budget'] || 0) - (form['Actual Cost'] || 0)
+  const variance = (Number(form['Xactimate Budget']) || 0) - (Number(form['Actual Cost']) || 0)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,7 +159,7 @@ export function JobCostForm({ open, onOpenChange, claimRecordId, onSuccess, edit
             </div>
           </div>
 
-          {(form['Xactimate Budget'] > 0 || form['Actual Cost'] > 0) && (
+          {(Number(form['Xactimate Budget']) > 0 || Number(form['Actual Cost']) > 0) && (
             <div className={`text-sm px-3 py-2 rounded-md ${variance >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
               Variance: ${variance.toLocaleString('en-US', { minimumFractionDigits: 2 })} {variance >= 0 ? '(under budget)' : '(over budget)'}
             </div>

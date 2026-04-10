@@ -76,12 +76,12 @@ export function AdjusterReportForm({ open, onOpenChange, claimRecordId, onSucces
     if (!form['Report Name'].trim()) e['Report Name'] = 'Report name is required'
     if (!form['Report Date']) e['Report Date'] = 'Report date is required'
     if (!form['Adjuster Name'].trim()) e['Adjuster Name'] = 'Adjuster name is required'
-    if (form['RCV Amount'] < 0) e['RCV Amount'] = 'RCV cannot be negative'
-    if (form['ACV Amount'] < 0) e['ACV Amount'] = 'ACV cannot be negative'
+    if (Number(form['RCV Amount']) < 0) e['RCV Amount'] = 'RCV cannot be negative'
+    if (Number(form['ACV Amount']) < 0) e['ACV Amount'] = 'ACV cannot be negative'
     if (!form['RCV Amount'] && !form['ACV Amount']) e['RCV Amount'] = 'Enter at least RCV or ACV amount'
-    if (form.Depreciation < 0) e['Depreciation'] = 'Depreciation cannot be negative'
-    if (form['O&P Amount'] < 0) e['O&P Amount'] = 'O&P cannot be negative'
-    if (form.Deductible < 0) e['Deductible'] = 'Deductible cannot be negative'
+    if (Number(form.Depreciation) < 0) e['Depreciation'] = 'Depreciation cannot be negative'
+    if (Number(form['O&P Amount']) < 0) e['O&P Amount'] = 'O&P cannot be negative'
+    if (Number(form.Deductible) < 0) e['Deductible'] = 'Deductible cannot be negative'
     if (form.Version < 1) e['Version'] = 'Version must be at least 1'
     setErrors(e)
     return Object.keys(e).length === 0

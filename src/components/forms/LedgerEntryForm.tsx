@@ -83,7 +83,7 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
     if (!form['Entry Name'].trim()) e['Entry Name'] = 'Entry name is required'
     if (!form['Entry Type']) e['Entry Type'] = 'Entry type is required'
     if (!form.Direction) e['Direction'] = 'Direction is required'
-    if (!form.Amount || form.Amount <= 0) e['Amount'] = 'Amount must be greater than 0'
+    if (!form.Amount || Number(form.Amount) <= 0) e['Amount'] = 'Amount must be greater than 0'
     if (!form.Date) e['Date'] = 'Date is required'
     if (!form['Payer/Payee'].trim()) e['Payer/Payee'] = 'Payer/Payee is required'
     setErrors(e)
