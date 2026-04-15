@@ -115,6 +115,35 @@ export async function updateClaimChecklist(
  * Updates Total Payout, Total Outstanding Payments, and RCV/ACV
  * on the Claims Master side so both bases stay in sync.
  */
+/**
+ * A row from the Claims Master "Payments Log" table.
+ * Used to surface externally-logged payments on the Overview "Recently Updated" feed.
+ */
+export interface PaymentLogRow {
+  id: string;
+  Claim: string[];
+  Amount: number;
+  'Payment Date': string;
+  'Due Date': string;
+  Vendor: string;
+  Description: string;
+  'Payment Status': string;
+}
+
+export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
+  const records = await claimsMasterBase('Payments Log').select().all();
+  return records.map(r => ({
+    id: r.id,
+    Claim: (r.fields['Claim'] as string[]) || [],
+    Amount: (r.fields['Amount'] as number) || 0,
+    'Payment Date': (r.fields['Payment Date'] as string) || '',
+    'Due Date': (r.fields['Due Date'] as string) || '',
+    Vendor: (r.fields['Vendor'] as string) || '',
+    Description: (r.fields['Description'] as string) || '',
+    'Payment Status': (r.fields['Payment Status'] as string) || '',
+  }));
+}
+
 export async function syncFinancialSummaryToClaimsMaster(
   claimsMasterRecordId: string,
   summary: FinancialSummary

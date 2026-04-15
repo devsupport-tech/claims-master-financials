@@ -26,7 +26,7 @@ import {
   getPortfolioOverview,
 } from '@/lib/airtable';
 import type { PortfolioOverviewData } from '@/lib/airtable';
-import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster } from '@/lib/claims-master';
+import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster, getPaymentsLog } from '@/lib/claims-master';
 import {
   DollarSign,
   FileText,
@@ -144,11 +144,15 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
       setIsLoadingOverview(true);
     }
     try {
-      // Claims Master is the source of truth for all claim data
-      const claimsData = await getAllClaimsMaster();
+      // Claims Master is the source of truth for all claim data.
+      // Payments Log lives in the Claims Master base too; fetch in parallel.
+      const [claimsData, paymentsLogData] = await Promise.all([
+        getAllClaimsMaster(),
+        getPaymentsLog(),
+      ]);
       setClaims(claimsData);
 
-      const overviewData = await getPortfolioOverview(claimsData);
+      const overviewData = await getPortfolioOverview(claimsData, paymentsLogData);
       setOverview(overviewData);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -237,8 +241,8 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
         }
       }
 
-      // Silent refresh so the overview + claims list reflect the new transaction
-      // without flashing loading spinners over the claim detail view.
+      // Silent refresh so the overview + claims list + payments log reflect
+      // the new transaction without flashing loading spinners over the detail view.
       refreshAll(true);
     }
   }

@@ -270,7 +270,7 @@ export async function getClaimFinancialSummary(claimRecordId: string) {
 
 export interface RecentActivity {
   id: string;
-  type: 'Ledger' | 'Report' | 'Release' | 'Cost';
+  type: 'Ledger' | 'Report' | 'Release' | 'Cost' | 'Payment';
   date: string;
   name: string;
   amount: number;
@@ -300,7 +300,10 @@ export interface PortfolioOverviewData {
   recentActivity: RecentActivity[];
 }
 
-export async function getPortfolioOverview(claimsMasterData?: any[]): Promise<PortfolioOverviewData> {
+export async function getPortfolioOverview(
+  claimsMasterData?: any[],
+  paymentsLogData?: any[],
+): Promise<PortfolioOverviewData> {
   // Financials base: needed for transaction details (ledger, costs) and claim ID resolution
   const [financialClaims, ledger, reports, releases, costs] = await Promise.all([
     getAllClaims(),
@@ -423,6 +426,28 @@ export async function getPortfolioOverview(claimsMasterData?: any[]): Promise<Po
       name: c['Cost Name'] || c['Trade Category'] || '—',
       amount: c['Actual Cost'] || c['Xactimate Budget'] || 0,
       claimId: resolveClaimId(c),
+    });
+  });
+
+  // Claims Master → Payments Log rows: externally-logged payments that don't
+  // exist in the Financials base. Resolve the Claim link against Claims Master
+  // and drop any that don't map to a known claim.
+  const masterIdToClaimId: Record<string, string> = {};
+  claims.forEach((c: any) => { masterIdToClaimId[c.id] = c['Claim ID'] || ''; });
+  (paymentsLogData || []).forEach((p: any) => {
+    const linkedMasterId = Array.isArray(p.Claim) && p.Claim.length > 0 ? p.Claim[0] : '';
+    const claimId = masterIdToClaimId[linkedMasterId];
+    if (!claimId || !validClaimIds.has(claimId)) return;
+    const date = p['Payment Date'] || p['Due Date'];
+    if (!date) return;
+    const label = p.Vendor || p.Description || 'Payment';
+    activity.push({
+      id: `payment-${p.id}`,
+      type: 'Payment',
+      date,
+      name: p['Payment Status'] ? `${label} (${p['Payment Status']})` : label,
+      amount: p.Amount || 0,
+      claimId,
     });
   });
 

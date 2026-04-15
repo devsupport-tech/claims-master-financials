@@ -25,6 +25,7 @@ const typeBadgeColors: Record<string, 'default' | 'secondary' | 'success' | 'war
   Report: 'default',
   Release: 'secondary',
   Cost: 'warning',
+  Payment: 'success',
 };
 
 const typeIcons: Record<string, typeof Receipt> = {
@@ -32,6 +33,7 @@ const typeIcons: Record<string, typeof Receipt> = {
   Report: FileText,
   Release: Building2,
   Cost: Wrench,
+  Payment: DollarSign,
 };
 
 export function PortfolioOverview({ data }: PortfolioOverviewProps) {
