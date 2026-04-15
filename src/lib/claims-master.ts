@@ -128,6 +128,7 @@ export interface PaymentLogRow {
   Vendor: string;
   Description: string;
   'Payment Status': string;
+  createdTime: string;
 }
 
 export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
@@ -141,6 +142,9 @@ export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
     Vendor: (r.fields['Vendor'] as string) || '',
     Description: (r.fields['Description'] as string) || '',
     'Payment Status': (r.fields['Payment Status'] as string) || '',
+    // Fallback date so rows without Payment Date / Due Date still surface in
+    // the Recently Updated feed, ordered by when they were logged.
+    createdTime: ((r as any)._rawJson?.createdTime as string) || '',
   }));
 }
 

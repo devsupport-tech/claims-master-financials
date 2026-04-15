@@ -358,14 +358,28 @@ export async function getPortfolioOverview(
   const totalRCV = claims.reduce((sum: number, c: any) => sum + (c.RCV || 0), 0);
   const totalACV = claims.reduce((sum: number, c: any) => sum + (c.ACV || 0), 0);
 
-  // Total Received — computed from the filtered ledger (source of truth),
-  // not from the Claims Master 'Total Payout' field which is synced asynchronously.
-  const totalReceived = filteredLedger
+  // Build a Claims Master id → Claim ID lookup once; reused for payments log too.
+  const masterIdToClaimId: Record<string, string> = {};
+  claims.forEach((c: any) => { masterIdToClaimId[c.id] = c['Claim ID'] || ''; });
+
+  // Paid rows from Claims Master → Payments Log also count as received.
+  const paidPaymentsTotal = (paymentsLogData || []).reduce((sum: number, p: any) => {
+    const linkedMasterId = Array.isArray(p.Claim) && p.Claim.length > 0 ? p.Claim[0] : '';
+    const claimId = masterIdToClaimId[linkedMasterId];
+    if (!claimId || !validClaimIds.has(claimId)) return sum;
+    const status = (p['Payment Status'] || p.Status || '').toLowerCase();
+    if (status !== 'paid') return sum;
+    return sum + (p.Amount || 0);
+  }, 0);
+
+  // Total Received — ledger inflows + paid Claims Master payments.
+  const ledgerReceived = filteredLedger
     .filter((e: any) =>
       ['Insurance Payment', 'Homeowner Payment', 'Mortgage Release'].includes(e['Entry Type'])
       && e.Direction === 'Inflow'
     )
     .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+  const totalReceived = ledgerReceived + paidPaymentsTotal;
 
   // Outstanding still reads from Claims Master; polling + post-change refresh keep it current.
   const totalOutstanding = claims.reduce((sum: number, c: any) => sum + (c['Total Outstanding Payments'] || 0), 0);
@@ -431,21 +445,21 @@ export async function getPortfolioOverview(
 
   // Claims Master → Payments Log rows: externally-logged payments that don't
   // exist in the Financials base. Resolve the Claim link against Claims Master
-  // and drop any that don't map to a known claim.
-  const masterIdToClaimId: Record<string, string> = {};
-  claims.forEach((c: any) => { masterIdToClaimId[c.id] = c['Claim ID'] || ''; });
+  // and drop any that don't map to a known claim. Fall back to createdTime so
+  // rows without Payment Date / Due Date still surface (ordered by log time).
   (paymentsLogData || []).forEach((p: any) => {
     const linkedMasterId = Array.isArray(p.Claim) && p.Claim.length > 0 ? p.Claim[0] : '';
     const claimId = masterIdToClaimId[linkedMasterId];
     if (!claimId || !validClaimIds.has(claimId)) return;
-    const date = p['Payment Date'] || p['Due Date'];
+    const date = p['Payment Date'] || p['Due Date'] || p.createdTime || '';
     if (!date) return;
     const label = p.Vendor || p.Description || 'Payment';
+    const statusLabel = p['Payment Status'] || p.Status || '';
     activity.push({
       id: `payment-${p.id}`,
       type: 'Payment',
       date,
-      name: p['Payment Status'] ? `${label} (${p['Payment Status']})` : label,
+      name: statusLabel ? `${label} (${statusLabel})` : label,
       amount: p.Amount || 0,
       claimId,
     });
