@@ -60,19 +60,15 @@ export async function deleteClaim(recordId: string) {
 // ==========================================
 
 export async function getFinancialLedger(claimRecordId?: string) {
-  const options: any = {
-    sort: [{ field: 'Date', direction: 'desc' }],
-  };
-
-  if (claimRecordId) {
-    options.filterByFormula = `SEARCH('${claimRecordId}', ARRAYJOIN({Claim}))`;
-  }
-
-  const records = await base(TABLES.FINANCIAL_LEDGER).select(options).all();
-  return records.map(record => ({
-    id: record.id,
-    ...record.fields,
-  }));
+  // No server-side filterByFormula on {Claim}: Airtable's ARRAYJOIN on a linked
+  // field returns primary-field values, not record IDs, so a SEARCH for a rec...
+  // id would never match. Fetch all and filter by linked record IDs client-side.
+  const records = await base(TABLES.FINANCIAL_LEDGER)
+    .select({ sort: [{ field: 'Date', direction: 'desc' }] })
+    .all();
+  const mapped = records.map(record => ({ id: record.id, ...record.fields }));
+  if (!claimRecordId) return mapped;
+  return mapped.filter((r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId));
 }
 
 export async function createLedgerEntry(data: Record<string, any>) {
@@ -94,19 +90,12 @@ export async function deleteLedgerEntry(recordId: string) {
 // ==========================================
 
 export async function getAdjusterReports(claimRecordId?: string) {
-  const options: any = {
-    sort: [{ field: 'Version', direction: 'asc' }],
-  };
-
-  if (claimRecordId) {
-    options.filterByFormula = `SEARCH('${claimRecordId}', ARRAYJOIN({Claim}))`;
-  }
-
-  const records = await base(TABLES.ADJUSTER_REPORTS).select(options).all();
-  return records.map(record => ({
-    id: record.id,
-    ...record.fields,
-  }));
+  const records = await base(TABLES.ADJUSTER_REPORTS)
+    .select({ sort: [{ field: 'Version', direction: 'asc' }] })
+    .all();
+  const mapped = records.map(record => ({ id: record.id, ...record.fields }));
+  if (!claimRecordId) return mapped;
+  return mapped.filter((r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId));
 }
 
 export async function createAdjusterReport(data: Record<string, any>) {
@@ -128,19 +117,12 @@ export async function deleteAdjusterReport(recordId: string) {
 // ==========================================
 
 export async function getMortgageReleases(claimRecordId?: string) {
-  const options: any = {
-    sort: [{ field: 'Release Number', direction: 'asc' }],
-  };
-
-  if (claimRecordId) {
-    options.filterByFormula = `SEARCH('${claimRecordId}', ARRAYJOIN({Claim}))`;
-  }
-
-  const records = await base(TABLES.MORTGAGE_RELEASES).select(options).all();
-  return records.map(record => ({
-    id: record.id,
-    ...record.fields,
-  }));
+  const records = await base(TABLES.MORTGAGE_RELEASES)
+    .select({ sort: [{ field: 'Release Number', direction: 'asc' }] })
+    .all();
+  const mapped = records.map(record => ({ id: record.id, ...record.fields }));
+  if (!claimRecordId) return mapped;
+  return mapped.filter((r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId));
 }
 
 export async function createMortgageRelease(data: Record<string, any>) {
@@ -162,19 +144,12 @@ export async function deleteMortgageRelease(recordId: string) {
 // ==========================================
 
 export async function getJobCosting(claimRecordId?: string) {
-  const options: any = {
-    sort: [{ field: 'Trade Category', direction: 'asc' }],
-  };
-
-  if (claimRecordId) {
-    options.filterByFormula = `SEARCH('${claimRecordId}', ARRAYJOIN({Claim}))`;
-  }
-
-  const records = await base(TABLES.JOB_COSTING).select(options).all();
-  return records.map(record => ({
-    id: record.id,
-    ...record.fields,
-  }));
+  const records = await base(TABLES.JOB_COSTING)
+    .select({ sort: [{ field: 'Trade Category', direction: 'asc' }] })
+    .all();
+  const mapped = records.map(record => ({ id: record.id, ...record.fields }));
+  if (!claimRecordId) return mapped;
+  return mapped.filter((r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId));
 }
 
 export async function createJobCost(data: Record<string, any>) {
@@ -380,8 +355,16 @@ export async function getPortfolioOverview(claimsMasterData?: any[]): Promise<Po
   const totalRCV = claims.reduce((sum: number, c: any) => sum + (c.RCV || 0), 0);
   const totalACV = claims.reduce((sum: number, c: any) => sum + (c.ACV || 0), 0);
 
-  // Total Received & Outstanding from Claims Master
-  const totalReceived = claims.reduce((sum: number, c: any) => sum + (c['Total Payout'] || 0), 0);
+  // Total Received — computed from the filtered ledger (source of truth),
+  // not from the Claims Master 'Total Payout' field which is synced asynchronously.
+  const totalReceived = filteredLedger
+    .filter((e: any) =>
+      ['Insurance Payment', 'Homeowner Payment', 'Mortgage Release'].includes(e['Entry Type'])
+      && e.Direction === 'Inflow'
+    )
+    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+
+  // Outstanding still reads from Claims Master; polling + post-change refresh keep it current.
   const totalOutstanding = claims.reduce((sum: number, c: any) => sum + (c['Total Outstanding Payments'] || 0), 0);
 
   // ── Transaction-level data: only for Claims Master claims ──

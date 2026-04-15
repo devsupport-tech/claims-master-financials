@@ -121,14 +121,28 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [releases, setReleases] = useState<MortgageRelease[]>([]);
   const [costs, setCosts] = useState<JobCost[]>([]);
 
-  // Load claims + overview on mount
+  // Load claims + overview on mount, then poll every 30s to keep data fresh.
+  // Polling pauses while viewing a claim detail or while any create/edit dialog is open,
+  // so it cannot steal focus or thrash in-progress edits.
   useEffect(() => {
     loadAll();
-  }, []);
+    const POLL_MS = 30_000;
+    const id = setInterval(() => {
+      if (view === 'claim-detail') return;
+      if (showLedgerForm || showReportForm || showReleaseForm || showCostForm) return;
+      if (editingLedger || editingReport || editingRelease || editingCost) return;
+      if (deleteTarget) return;
+      refreshAll(true);
+    }, POLL_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, showLedgerForm, showReportForm, showReleaseForm, showCostForm, editingLedger, editingReport, editingRelease, editingCost, deleteTarget]);
 
-  async function loadAll() {
-    setIsLoading(true);
-    setIsLoadingOverview(true);
+  async function refreshAll(silent = false) {
+    if (!silent) {
+      setIsLoading(true);
+      setIsLoadingOverview(true);
+    }
     try {
       // Claims Master is the source of truth for all claim data
       const claimsData = await getAllClaimsMaster();
@@ -139,9 +153,15 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
-      setIsLoading(false);
-      setIsLoadingOverview(false);
+      if (!silent) {
+        setIsLoading(false);
+        setIsLoadingOverview(false);
+      }
     }
+  }
+
+  async function loadAll() {
+    return refreshAll(false);
   }
 
   async function handleSelectClaim(claim: ClaimMaster) {
@@ -205,14 +225,21 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     if (financialRecordId) {
       await loadClaimDetails(financialRecordId);
 
-      // Sync updated financial summary back to Claims Master
+      // Sync updated financial summary back to Claims Master, then refresh the
+      // portfolio overview so returning to the Overview tab shows fresh totals.
       const selectedClaim = claims.find(c => c.id === selectedClaimId);
       if (selectedClaim) {
         const freshSummary = await getClaimFinancialSummary(financialRecordId);
-        syncFinancialSummaryToClaimsMaster(selectedClaim.id, freshSummary as FinancialSummary).catch(err =>
-          console.error('Failed to sync to Claims Master:', err)
-        );
+        try {
+          await syncFinancialSummaryToClaimsMaster(selectedClaim.id, freshSummary as FinancialSummary);
+        } catch (err) {
+          console.error('Failed to sync to Claims Master:', err);
+        }
       }
+
+      // Silent refresh so the overview + claims list reflect the new transaction
+      // without flashing loading spinners over the claim detail view.
+      refreshAll(true);
     }
   }
 
@@ -482,7 +509,14 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                 </CardContent>
               </Card>
             ) : overview ? (
-              <PortfolioOverview data={overview} />
+              <div className="space-y-6">
+                <PortfolioOverview data={overview} />
+                <ClaimsTable
+                  claims={claims}
+                  isLoading={isLoading}
+                  onSelectClaim={handleSelectClaim}
+                />
+              </div>
             ) : (
               <Card className="py-16">
                 <CardContent className="text-center text-muted-foreground">
