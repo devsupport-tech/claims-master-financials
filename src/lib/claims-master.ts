@@ -170,7 +170,8 @@ export async function getModulesForClaim(claimRecordId: string): Promise<ModuleR
     })
     .map(r => ({
       id: r.id,
-      'Module Name': (r.fields['Module Name'] as string) || '',
+      // Fall back to Module Type when Module Name is empty
+      'Module Name': (r.fields['Module Name'] as string) || (r.fields['Module Type'] as string) || '',
       Claim: (r.fields['Claim'] as string[]) || [],
       Status: ((r.fields['Status'] as any)?.name ?? (r.fields['Status'] as string)) || '',
       Vendor: (r.fields['Vendor'] as string) || '',
