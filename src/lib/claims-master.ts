@@ -148,6 +148,36 @@ export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
   }));
 }
 
+/**
+ * A row from the Claims Master "Modules" table.
+ * Used to dynamically drive the Submissions tab instead of hardcoded services.
+ */
+export interface ModuleRow {
+  id: string;
+  'Module Name': string;
+  Claim: string[];
+  Status: string;
+  Vendor: string;
+  'Payment Amount': number;
+}
+
+export async function getModulesForClaim(claimRecordId: string): Promise<ModuleRow[]> {
+  const records = await claimsMasterBase('Modules').select().all();
+  return records
+    .filter(r => {
+      const claims = (r.fields['Claim'] as string[]) || [];
+      return claims.includes(claimRecordId);
+    })
+    .map(r => ({
+      id: r.id,
+      'Module Name': (r.fields['Module Name'] as string) || '',
+      Claim: (r.fields['Claim'] as string[]) || [],
+      Status: ((r.fields['Status'] as any)?.name ?? (r.fields['Status'] as string)) || '',
+      Vendor: (r.fields['Vendor'] as string) || '',
+      'Payment Amount': (r.fields['Payment Amount'] as number) || 0,
+    }));
+}
+
 export async function syncFinancialSummaryToClaimsMaster(
   claimsMasterRecordId: string,
   summary: FinancialSummary

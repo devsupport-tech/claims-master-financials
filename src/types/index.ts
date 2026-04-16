@@ -46,14 +46,10 @@ export interface ClaimMaster {
 }
 
 // Insurance Submission Checklist types
-export type InsuranceSubmissionChecklistKey =
-  | 'mitigation'
-  | 'rebuild'
-  | 'packout'
-  | 'packIn'
-  | 'supplement'
-  | 'finalReport'
-  | 'invoiceReceipt';
+// Dynamic: keyed by the Airtable module record ID (rec...) rather than a fixed
+// set of services. Old fixed keys are still valid strings — they just won't
+// match any module and are silently dropped on load.
+export type InsuranceSubmissionChecklistKey = string;
 
 export interface InsuranceSubmissionChecklistItem {
   key: InsuranceSubmissionChecklistKey;

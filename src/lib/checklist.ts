@@ -4,16 +4,6 @@ import type {
   InsuranceSubmissionChecklistKey,
 } from '@/types';
 
-const DEFAULT_CHECKLIST_TEMPLATE: InsuranceSubmissionChecklistItem[] = [
-  { key: 'mitigation', label: 'Mitigation', submitted: false, amount: 0 },
-  { key: 'rebuild', label: 'Rebuild', submitted: false, amount: 0 },
-  { key: 'packout', label: 'Packout', submitted: false, amount: 0 },
-  { key: 'packIn', label: 'Pack-In', submitted: false, amount: 0 },
-  { key: 'supplement', label: 'Supplement', submitted: false, amount: 0 },
-  { key: 'finalReport', label: 'Final Report', submitted: false, amount: 0 },
-  { key: 'invoiceReceipt', label: 'Invoice / Receipt', submitted: false, amount: 0 },
-];
-
 function sanitizeNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -32,19 +22,6 @@ function sanitizeNumber(value: unknown): number {
   return 0;
 }
 
-function createTemplateItem(item: InsuranceSubmissionChecklistItem): InsuranceSubmissionChecklistItem {
-  return {
-    key: item.key,
-    label: item.label,
-    submitted: false,
-    submittedDate: '',
-    amount: 0,
-    amountReleased: 0,
-    releaseDate: '',
-    notes: '',
-  };
-}
-
 export function calculateTotalSubmittedAmount(items: InsuranceSubmissionChecklistItem[]): number {
   return items.reduce((total, item) => {
     if (!item.submitted) {
@@ -54,8 +31,55 @@ export function calculateTotalSubmittedAmount(items: InsuranceSubmissionChecklis
   }, 0);
 }
 
-export function createDefaultInsuranceSubmissionChecklist(): InsuranceSubmissionChecklist {
-  const items = DEFAULT_CHECKLIST_TEMPLATE.map(createTemplateItem);
+/**
+ * Attempt to parse items out of a raw checklist JSON string.
+ * Returns a Map keyed by item key (module record ID or legacy key).
+ */
+function tryParseItemsMap(
+  raw?: string
+): Map<InsuranceSubmissionChecklistKey, Partial<InsuranceSubmissionChecklistItem>> {
+  const map = new Map<InsuranceSubmissionChecklistKey, Partial<InsuranceSubmissionChecklistItem>>();
+  if (!raw || typeof raw !== 'string') return map;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.items)) {
+      for (const item of parsed.items) {
+        if (item?.key) {
+          map.set(item.key, item);
+        }
+      }
+    }
+  } catch {
+    // corrupt JSON — return empty map
+  }
+  return map;
+}
+
+/**
+ * Build a checklist from the claim's linked modules.
+ * Each module becomes one row; previously-saved data (from the Checklist JSON
+ * field) is merged by matching module record IDs.
+ */
+export function buildChecklistFromModules(
+  modules: { id: string; 'Module Name': string }[],
+  existingJson?: string,
+): InsuranceSubmissionChecklist {
+  const existing = tryParseItemsMap(existingJson);
+
+  const items: InsuranceSubmissionChecklistItem[] = modules.map(m => {
+    const saved = existing.get(m.id);
+    return {
+      key: m.id,
+      label: m['Module Name'] || 'Module',
+      submitted: Boolean(saved?.submitted),
+      submittedDate: typeof saved?.submittedDate === 'string' ? saved.submittedDate : '',
+      amount: sanitizeNumber(saved?.amount),
+      amountReleased: sanitizeNumber(saved?.amountReleased),
+      releaseDate: typeof saved?.releaseDate === 'string' ? saved.releaseDate : '',
+      notes: typeof saved?.notes === 'string' ? saved.notes : '',
+    };
+  });
 
   return {
     items,
@@ -63,40 +87,17 @@ export function createDefaultInsuranceSubmissionChecklist(): InsuranceSubmission
   };
 }
 
-function normalizeChecklistItem(
-  template: InsuranceSubmissionChecklistItem,
-  rawItem?: Partial<InsuranceSubmissionChecklistItem> | null
-): InsuranceSubmissionChecklistItem {
-  const submittedDate = typeof rawItem?.submittedDate === 'string' ? rawItem.submittedDate : '';
-  const releaseDate = typeof rawItem?.releaseDate === 'string' ? rawItem.releaseDate : '';
-  const notes = typeof rawItem?.notes === 'string' ? rawItem.notes : '';
-
-  return {
-    key: template.key,
-    label: template.label,
-    submitted: Boolean(rawItem?.submitted),
-    submittedDate,
-    amount: sanitizeNumber(rawItem?.amount),
-    amountReleased: sanitizeNumber(rawItem?.amountReleased),
-    releaseDate,
-    notes,
-  };
-}
-
+/**
+ * Re-calculate totals after an in-memory edit.
+ */
 export function normalizeInsuranceSubmissionChecklist(
   checklist: InsuranceSubmissionChecklist
 ): InsuranceSubmissionChecklist {
-  const itemMap = new Map<InsuranceSubmissionChecklistKey, Partial<InsuranceSubmissionChecklistItem>>();
-
-  for (const item of checklist.items || []) {
-    if (item?.key) {
-      itemMap.set(item.key, item);
-    }
-  }
-
-  const items = DEFAULT_CHECKLIST_TEMPLATE.map((template) =>
-    normalizeChecklistItem(template, itemMap.get(template.key))
-  );
+  const items = (checklist.items || []).map((item) => ({
+    ...item,
+    amount: sanitizeNumber(item.amount),
+    amountReleased: sanitizeNumber(item.amountReleased),
+  }));
 
   return {
     items,
@@ -105,15 +106,19 @@ export function normalizeInsuranceSubmissionChecklist(
   };
 }
 
+/**
+ * Parse a raw checklist JSON string into a checklist object.
+ * Used as a fallback when modules haven't been loaded yet.
+ */
 export function parseInsuranceSubmissionChecklist(rawChecklist?: string): InsuranceSubmissionChecklist {
   if (!rawChecklist || typeof rawChecklist !== 'string') {
-    return createDefaultInsuranceSubmissionChecklist();
+    return { items: [], totalSubmittedAmount: 0 };
   }
 
   try {
     const parsed = JSON.parse(rawChecklist);
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
-      return createDefaultInsuranceSubmissionChecklist();
+      return { items: [], totalSubmittedAmount: 0 };
     }
 
     return normalizeInsuranceSubmissionChecklist({
@@ -122,7 +127,7 @@ export function parseInsuranceSubmissionChecklist(rawChecklist?: string): Insura
       lastUpdatedAt: typeof parsed.lastUpdatedAt === 'string' ? parsed.lastUpdatedAt : undefined,
     });
   } catch {
-    return createDefaultInsuranceSubmissionChecklist();
+    return { items: [], totalSubmittedAmount: 0 };
   }
 }
 

@@ -13,11 +13,11 @@ import {
 } from '@/components/ui/table';
 import type { InsuranceSubmissionChecklistKey } from '@/types';
 import {
+  buildChecklistFromModules,
   normalizeInsuranceSubmissionChecklist,
-  parseInsuranceSubmissionChecklist,
   serializeInsuranceSubmissionChecklist,
 } from '@/lib/checklist';
-import { getClaimChecklist, updateClaimChecklist } from '@/lib/claims-master';
+import { getClaimChecklist, updateClaimChecklist, getModulesForClaim } from '@/lib/claims-master';
 
 interface InsuranceSubmissionTrackerProps {
   claimsMasterRecordId: string;
@@ -32,11 +32,12 @@ function formatCurrency(value: number): string {
 }
 
 export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSubmissionTrackerProps) {
-  const [checklist, setChecklist] = useState(() => parseInsuranceSubmissionChecklist());
+  const [checklist, setChecklist] = useState(() => buildChecklistFromModules([]));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [hasModules, setHasModules] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,13 +46,17 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
       setIsLoading(true);
       setError('');
       try {
-        const raw = await getClaimChecklist(claimsMasterRecordId);
+        const [rawChecklist, modules] = await Promise.all([
+          getClaimChecklist(claimsMasterRecordId),
+          getModulesForClaim(claimsMasterRecordId),
+        ]);
         if (!cancelled) {
-          setChecklist(parseInsuranceSubmissionChecklist(raw));
+          setHasModules(modules.length > 0);
+          setChecklist(buildChecklistFromModules(modules, rawChecklist));
         }
       } catch (err: any) {
         if (!cancelled) {
-          console.error('Failed to load checklist:', err);
+          console.error('Failed to load submission data:', err);
           setError('Failed to load submission data.');
         }
       } finally {
@@ -133,6 +138,16 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
           Loading submission data...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!hasModules) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          No modules found for this claim. Add modules in Claims Master to track submissions.
         </CardContent>
       </Card>
     );
