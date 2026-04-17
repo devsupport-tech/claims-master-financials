@@ -6,3 +6,5 @@ export { JobCostingTable } from './JobCostingTable';
 export { PortfolioOverview } from './PortfolioOverview';
 export { ClaimsTable } from './ClaimsTable';
 export { InsuranceSubmissionTracker } from './InsuranceSubmissionTracker';
+export { FinancialReportTab } from './FinancialReportTab';
+export { SidebarSearch } from './SidebarSearch';

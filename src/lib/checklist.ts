@@ -62,7 +62,13 @@ function tryParseItemsMap(
  * field) is merged by matching module record IDs.
  */
 export function buildChecklistFromModules(
-  modules: { id: string; 'Module Name': string }[],
+  modules: {
+    id: string;
+    'Module Name': string;
+    'Bill To'?: 'Insurance' | 'Client';
+    'Operation Status'?: string;
+    'Estimate Status'?: string;
+  }[],
   existingJson?: string,
 ): InsuranceSubmissionChecklist {
   const existing = tryParseItemsMap(existingJson);
@@ -78,6 +84,11 @@ export function buildChecklistFromModules(
       amountReleased: sanitizeNumber(saved?.amountReleased),
       releaseDate: typeof saved?.releaseDate === 'string' ? saved.releaseDate : '',
       notes: typeof saved?.notes === 'string' ? saved.notes : '',
+      // Display-only mirrors from the Module — not persisted back into the
+      // Checklist JSON (see serializeInsuranceSubmissionChecklist).
+      billTo: m['Bill To'],
+      operationStatus: m['Operation Status'],
+      estimateStatus: m['Estimate Status'],
     };
   });
 

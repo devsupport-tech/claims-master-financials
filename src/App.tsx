@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Dashboard } from '@/pages/Dashboard';
 import Login from '@/pages/Login';
+import { scheduleStartupReconcile } from '@/lib/reconcileOnStartup';
 import './index.css';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -19,6 +20,10 @@ function App() {
       setIsAuthenticated(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) scheduleStartupReconcile();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const root = document.documentElement;

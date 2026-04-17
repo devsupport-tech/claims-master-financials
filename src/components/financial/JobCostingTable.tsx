@@ -20,15 +20,29 @@ const paymentStatusColors: Record<string, 'default' | 'secondary' | 'success' | 
   'Paid': 'success',
 };
 
+// "Budget" for a Job Costing row is whichever of these is set (in priority):
+//   1. Xactimate Budget — manually entered for trade subcontracts
+//   2. Approved Estimate Amount + Supplement — written by the lifecycle
+//      approve-estimate flow (used for service-style trades)
+// The two were treated as separate fields, but for display purposes they
+// represent the same concept: how much we approved for this trade.
+function rowBudget(c: any): number {
+  const xact = Number(c['Xactimate Budget']) || 0;
+  if (xact > 0) return xact;
+  const approved = Number(c['Approved Estimate Amount']) || 0;
+  const sup = c['Has Supplement'] ? Number(c['Supplement Approved Amount']) || 0 : 0;
+  return approved + sup;
+}
+
 export function JobCostingTable({ costs, onEdit, onDelete }: JobCostingTableProps) {
   // Calculate totals
-  const totalBudget = costs.reduce((sum, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
+  const totalBudget = costs.reduce((sum, c: any) => sum + rowBudget(c), 0);
   const totalActual = costs.reduce((sum, c: any) => sum + (c['Actual Cost'] || 0), 0);
   const totalVariance = totalBudget - totalActual;
   const variancePercent = totalBudget > 0 ? (totalVariance / totalBudget) * 100 : 0;
 
   // Find problem areas (over budget)
-  const overBudgetItems = costs.filter((c: any) => (c['Actual Cost'] || 0) > (c['Xactimate Budget'] || 0));
+  const overBudgetItems = costs.filter((c: any) => (c['Actual Cost'] || 0) > rowBudget(c));
 
   return (
     <Card>
@@ -42,7 +56,7 @@ export function JobCostingTable({ costs, onEdit, onDelete }: JobCostingTableProp
         {/* Summary */}
         <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
           <div>
-            <div className="text-sm text-muted-foreground">Xactimate Budget</div>
+            <div className="text-sm text-muted-foreground">Approved Budget</div>
             <div className="text-xl font-bold">{formatCurrency(totalBudget)}</div>
           </div>
           <div>
@@ -106,7 +120,7 @@ export function JobCostingTable({ costs, onEdit, onDelete }: JobCostingTableProp
             </TableHeader>
             <TableBody>
               {costs.map((cost: any) => {
-                const budget = cost['Xactimate Budget'] || 0;
+                const budget = rowBudget(cost);
                 const actual = cost['Actual Cost'] || 0;
                 const variance = budget - actual;
                 const progress = budget > 0 ? (actual / budget) * 100 : 0;

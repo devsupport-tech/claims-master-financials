@@ -60,6 +60,14 @@ export interface InsuranceSubmissionChecklistItem {
   amountReleased?: number;
   releaseDate?: string;
   notes?: string;
+  /**
+   * Display-only mirrors of the per-service lifecycle. Populated from the
+   * Module row at load time; not persisted in the Checklist JSON (the source
+   * of truth lives on the Module + Project rows).
+   */
+  billTo?: 'Insurance' | 'Client';
+  operationStatus?: string;
+  estimateStatus?: string;
 }
 
 export interface InsuranceSubmissionChecklist {
@@ -161,6 +169,38 @@ export interface JobCost {
   'Payment Amount'?: number;
   'Scope Description'?: string;
   Notes?: string;
+  // Per-service lifecycle (added by airtable-schema-sync)
+  'Approved Estimate Amount'?: number;
+  'Has Supplement'?: boolean;
+  'Supplement Approved Amount'?: number;
+  'Supplement Invoice Mode'?: 'Append to invoice' | 'Separate invoice';
+  'Supplement Separate Invoice Label'?: string;
+  'Module Record ID'?: string;
+  /** Airtable's auto-generated record createdTime, copied into fields by
+   *  getJobCosting so views can use it as a fallback "date" for rows that
+   *  were created via the lifecycle approval flow (no Invoice Date). */
+  _createdTime?: string;
+}
+
+/**
+ * View model surfaced by the FinancialReportTab — joins a Module row from
+ * Claims Master with its Job Costing row + supplement row + payments.
+ */
+export interface ServiceLifecycleView {
+  moduleRecordId: string;
+  serviceName: string;
+  billTo?: 'Insurance' | 'Client';
+  operationStatus?: string;
+  estimateStatus?: string;
+  approvedEstimateAmount: number;
+  hasSupplement: boolean;
+  supplementApprovedAmount: number;
+  supplementInvoiceMode: 'Append to invoice' | 'Separate invoice';
+  supplementSeparateInvoiceLabel?: string;
+  paidAmount: number;
+  jobCosting?: JobCost;
+  supplementJobCosting?: JobCost;
+  payments: LedgerEntry[];
 }
 
 export interface FinancialSummary {

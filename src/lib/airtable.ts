@@ -1,13 +1,76 @@
 import Airtable from 'airtable';
 
-const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = import.meta.env.VITE_AIRTABLE_BASE_ID;
+/**
+ * Routing through the Node sidecar proxy.
+ *
+ * The PAT no longer lives in the browser bundle. The Airtable SDK is
+ * pointed at `${VITE_API_BASE_URL}/airtable` (default `/api/airtable`),
+ * which the sidecar proxies to api.airtable.com after injecting the real
+ * PAT and validating the base ID against the deployment's whitelist.
+ *
+ * The `apiKey` we hand the SDK below is a placeholder — the proxy strips
+ * the inbound Authorization header and replaces it with the real PAT. Any
+ * value works as long as it's truthy (the SDK refuses to start without one).
+ */
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-  console.error('Missing Airtable configuration');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
+const PROXY_AIRTABLE = `${API_BASE_URL}/airtable`;
+
+interface BaseMap {
+  CLAIMS_MASTER: string;
+  FINANCIALS: string;
+  REST_OPS: string;
 }
 
-const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
+let baseMapCache: BaseMap | null = null;
+let baseMapPromise: Promise<BaseMap> | null = null;
+
+async function fetchBaseMap(): Promise<BaseMap> {
+  if (baseMapCache) return baseMapCache;
+  if (!baseMapPromise) {
+    baseMapPromise = fetch(`${API_BASE_URL}/bases`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`GET /api/bases → ${r.status}`);
+        return r.json();
+      })
+      .then((m: BaseMap) => {
+        baseMapCache = m;
+        return m;
+      });
+  }
+  return baseMapPromise;
+}
+
+/** Synchronous accessor — only valid after `bootstrapBases()` resolves. */
+export function baseIdOf(app: keyof BaseMap): string {
+  if (!baseMapCache) {
+    throw new Error('Base map not loaded yet — call bootstrapBases() at app startup.');
+  }
+  return baseMapCache[app];
+}
+
+export async function bootstrapBases(): Promise<BaseMap> {
+  return fetchBaseMap();
+}
+
+const PROXY_PLACEHOLDER_KEY = 'proxy-injected';
+const airtableClient = new Airtable({ apiKey: PROXY_PLACEHOLDER_KEY, endpointUrl: PROXY_AIRTABLE });
+
+/**
+ * Return a base bound to one of the three sibling bases. Defaults to the
+ * Financials base (this app's own).
+ */
+function baseFor(app: keyof BaseMap = 'FINANCIALS') {
+  return airtableClient.base(baseIdOf(app));
+}
+
+// Default `base` for this app — the Financials base. Resolved lazily so the
+// base map can be fetched at startup before any module-level code runs.
+// All existing call sites use `base(TABLES.X)…` so a function suffices.
+const base = ((tableName: string) =>
+  baseFor('FINANCIALS')(tableName)) as ReturnType<typeof baseFor>;
+
+export { baseFor };
 
 const TABLES = {
   CLAIMS: 'Claims',
@@ -147,7 +210,14 @@ export async function getJobCosting(claimRecordId?: string) {
   const records = await base(TABLES.JOB_COSTING)
     .select({ sort: [{ field: 'Trade Category', direction: 'asc' }] })
     .all();
-  const mapped = records.map(record => ({ id: record.id, ...record.fields }));
+  // Preserve Airtable's auto-generated createdTime as a known-key field so
+  // downstream views (Recently Updated, etc.) can fall back to it when no
+  // explicit Invoice Date / Approval Date is set on the row.
+  const mapped = records.map(record => ({
+    id: record.id,
+    _createdTime: (record as any)._rawJson?.createdTime as string | undefined,
+    ...record.fields,
+  }));
   if (!claimRecordId) return mapped;
   return mapped.filter((r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId));
 }
@@ -205,8 +275,14 @@ export async function getClaimFinancialSummary(claimRecordId: string) {
     .filter((r: any) => ['Check Received', 'Deposited'].includes(r['Release Status']))
     .reduce((sum: number, r: any) => sum + (r['Release Amount'] || 0), 0);
 
-  // Calculate job costing
-  const totalBudget = costs.reduce((sum: number, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
+  // Job costing — sum BOTH legacy Xactimate Budget and the new Approved
+  // Estimate Amount (incl. supplements) so totals reflect services that came
+  // through the lifecycle approval flow rather than the legacy budget field.
+  const totalBudget = costs.reduce((sum: number, c: any) => {
+    const approved = Number(c['Approved Estimate Amount']) || Number(c['Xactimate Budget']) || 0;
+    const sup = c['Has Supplement'] ? Number(c['Supplement Approved Amount']) || 0 : 0;
+    return sum + approved + sup;
+  }, 0);
   const totalActual = costs.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
 
   const totalRCV = (latestReport as any)?.['RCV Amount'] || claimData.RCV || 0;
@@ -238,12 +314,14 @@ export async function getClaimFinancialSummary(claimRecordId: string) {
     mortgageReleasesReceived: mortgageIn,
     totalReceived,
 
-    // Outstanding
-    insuranceOutstanding: totalACV - insuranceIn,
+    // Outstanding — same formula as Portfolio Overview: approved (Job Costing
+    // sum) minus what we've received. Clamped to 0 because negative
+    // outstanding doesn't mean anything (would imply we've been overpaid).
+    insuranceOutstanding: Math.max(0, totalBudget - insuranceIn),
     depreciationRecoverable: totalDepreciation,
     mortgageHeld,
     homeownerOwed: Math.max(0, deductible - homeownerIn),
-    totalOutstanding: (totalACV - insuranceIn) + totalDepreciation + mortgageHeld,
+    totalOutstanding: Math.max(0, totalBudget - totalReceived),
 
     // Job costing
     totalBudget,
@@ -381,20 +459,30 @@ export async function getPortfolioOverview(
     .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
   const totalReceived = ledgerReceived + paidPaymentsTotal;
 
-  // Outstanding still reads from Claims Master; polling + post-change refresh keep it current.
-  const totalOutstanding = claims.reduce((sum: number, c: any) => sum + (c['Total Outstanding Payments'] || 0), 0);
+  // Job costing — sum BOTH legacy Xactimate Budget and the new Approved
+  // Estimate Amount so the portfolio reflects services that were approved
+  // via the lifecycle flow (where only Approved Estimate Amount is set).
+  const totalBudget = filteredCosts.reduce(
+    (sum: number, c: any) =>
+      sum + (Number(c['Approved Estimate Amount']) || Number(c['Xactimate Budget']) || 0),
+    0,
+  );
+  const totalActual = filteredCosts.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
+  const totalVariance = totalBudget - totalActual;
+
+  // Outstanding = approved (live Job Costing) − received (live Ledger Inflows).
+  // Replaces the broken Claims-Master "Total Outstanding Payments" formula,
+  // which subtracted received from a denormalized field that never gets the
+  // new Approved Estimate Amount, so it always read negative.
+  const totalOutstanding = Math.max(0, totalBudget - totalReceived);
 
   // ── Transaction-level data: only for Claims Master claims ──
   const totalOutflows = filteredLedger
     .filter((e: any) => e.Direction === 'Outflow')
     .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
 
+  // Gross profit = received − outflows (vendor payments, etc).
   const grossProfit = totalReceived - totalOutflows;
-
-  // Job costing — only for Claims Master claims
-  const totalBudget = filteredCosts.reduce((sum: number, c: any) => sum + (c['Xactimate Budget'] || 0), 0);
-  const totalActual = filteredCosts.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
-  const totalVariance = totalBudget - totalActual;
 
   // ── Recently Updated: only for Claims Master claims ──
   const activity: RecentActivity[] = [];
@@ -433,12 +521,23 @@ export async function getPortfolioOverview(
   });
 
   filteredCosts.forEach((c: any) => {
+    // Date fall-through: explicit Invoice Date → Airtable createdTime
+    // (preserved by getJobCosting). Job Costing rows created by the
+    // approve-estimate flow don't carry an Invoice Date.
+    const date = c['Invoice Date'] || (c._createdTime ? c._createdTime.slice(0, 10) : '');
+    // Amount fall-through: Actual Cost → Xactimate Budget → Approved Estimate
+    // Amount + Supplement (set by the lifecycle flow).
+    const supplement = c['Has Supplement'] ? Number(c['Supplement Approved Amount']) || 0 : 0;
+    const amount =
+      Number(c['Actual Cost']) ||
+      Number(c['Xactimate Budget']) ||
+      (Number(c['Approved Estimate Amount']) || 0) + supplement;
     activity.push({
       id: c.id,
       type: 'Cost',
-      date: c['Invoice Date'] || '',
+      date,
       name: c['Cost Name'] || c['Trade Category'] || '—',
-      amount: c['Actual Cost'] || c['Xactimate Budget'] || 0,
+      amount,
       claimId: resolveClaimId(c),
     });
   });

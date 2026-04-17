@@ -1,15 +1,9 @@
-import Airtable from 'airtable';
-import { getClaimByClaimId, createClaim } from './airtable';
+import { getClaimByClaimId, createClaim, baseFor } from './airtable';
 import type { ClaimMaster, FinancialSummary } from '@/types';
 
-const AIRTABLE_API_KEY = import.meta.env.VITE_AIRTABLE_API_KEY;
-const CLAIMS_MASTER_BASE_ID = import.meta.env.VITE_CLAIMS_MASTER_BASE_ID;
-
-if (!CLAIMS_MASTER_BASE_ID) {
-  console.error('Missing VITE_CLAIMS_MASTER_BASE_ID configuration');
-}
-
-const claimsMasterBase = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(CLAIMS_MASTER_BASE_ID);
+// Routed through the sidecar proxy. The Claims Master sibling base is
+// resolved from the same /api/bases response that bootstrapped Financials.
+const claimsMasterBase = ((tableName: string) => baseFor('CLAIMS_MASTER')(tableName)) as ReturnType<typeof baseFor>;
 
 const TABLE_NAME = 'Claims';
 
@@ -155,10 +149,33 @@ export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
 export interface ModuleRow {
   id: string;
   'Module Name': string;
+  'Module Type': string;
   Claim: string[];
   Status: string;
   Vendor: string;
   'Payment Amount': number;
+  // Per-service lifecycle mirrors (added by airtable-schema-sync). Optional so
+  // older rows without the new fields still parse cleanly.
+  'Bill To'?: 'Insurance' | 'Client';
+  'Operation Status'?: string;
+  'Estimate Status'?: string;
+  'Approved Estimate Amount'?: number;
+  'Has Supplement'?: boolean;
+  'Supplement Approved Amount'?: number;
+  'Supplement Invoice Mode'?: 'Append to invoice' | 'Separate invoice';
+  'Supplement Separate Invoice Label'?: string;
+  'Job Costing Record ID'?: string;
+  'Restoration Project Record ID'?: string;
+  'Service Status'?: string;
+}
+
+function readSelect(field: unknown): string | undefined {
+  if (!field) return undefined;
+  if (typeof field === 'string') return field;
+  if (typeof field === 'object' && field !== null && 'name' in field) {
+    return (field as { name?: string }).name;
+  }
+  return undefined;
 }
 
 export async function getModulesForClaim(claimRecordId: string): Promise<ModuleRow[]> {
@@ -172,10 +189,27 @@ export async function getModulesForClaim(claimRecordId: string): Promise<ModuleR
       id: r.id,
       // Fall back to Module Type when Module Name is empty
       'Module Name': (r.fields['Module Name'] as string) || (r.fields['Module Type'] as string) || '',
+      'Module Type': (r.fields['Module Type'] as string) || '',
       Claim: (r.fields['Claim'] as string[]) || [],
-      Status: ((r.fields['Status'] as any)?.name ?? (r.fields['Status'] as string)) || '',
+      Status: readSelect(r.fields['Status']) || '',
       Vendor: (r.fields['Vendor'] as string) || '',
       'Payment Amount': (r.fields['Payment Amount'] as number) || 0,
+      'Bill To': readSelect(r.fields['Bill To']) as 'Insurance' | 'Client' | undefined,
+      'Operation Status': readSelect(r.fields['Operation Status']),
+      'Estimate Status': readSelect(r.fields['Estimate Status']),
+      // IMPORTANT: keep these as undefined when Airtable doesn't return the
+      // field. Modules schema doesn't carry the $ mirrors (canonical source
+      // is Job Costing in Financials). buildLifecycleViews uses `??` to fall
+      // through to the J value — collapsing to 0 here defeats that fallback.
+      'Approved Estimate Amount': r.fields['Approved Estimate Amount'] as number | undefined,
+      'Has Supplement':
+        r.fields['Has Supplement'] === undefined ? undefined : Boolean(r.fields['Has Supplement']),
+      'Supplement Approved Amount': r.fields['Supplement Approved Amount'] as number | undefined,
+      'Supplement Invoice Mode': readSelect(r.fields['Supplement Invoice Mode']) as 'Append to invoice' | 'Separate invoice' | undefined,
+      'Supplement Separate Invoice Label': r.fields['Supplement Separate Invoice Label'] as string | undefined,
+      'Job Costing Record ID': (r.fields['Job Costing Record ID'] as string) || '',
+      'Restoration Project Record ID': (r.fields['Restoration Project Record ID'] as string) || '',
+      'Service Status': (r.fields['Service Status'] as string) || '',
     }));
 }
 

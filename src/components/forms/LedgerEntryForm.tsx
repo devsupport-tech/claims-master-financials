@@ -14,6 +14,24 @@ interface LedgerEntryFormProps {
   claimRecordId: string
   onSuccess: () => void
   editRecord?: { id: string; [key: string]: any } | null
+  /**
+   * Defaults to seed a NEW entry with (e.g. when "Add payment to Water
+   * Mitigation" is clicked). Different from editRecord — passing this does
+   * NOT switch the form into edit mode; submission will create a row.
+   */
+  prefillValues?: Partial<{
+    'Entry Name': string
+    'Entry Type': string
+    Direction: string
+    Amount: number | string
+    Date: string
+    'Check Number': string
+    'Payer/Payee': string
+    Category: string
+    Description: string
+    Reconciled: boolean
+    Notes: string
+  }>
 }
 
 const DIRECTION_MAP: Record<string, string> = {
@@ -40,7 +58,7 @@ const INITIAL_STATE = {
 
 type Errors = Partial<Record<string, string>>
 
-export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, editRecord }: LedgerEntryFormProps) {
+export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, editRecord, prefillValues }: LedgerEntryFormProps) {
   const [form, setForm] = useState({ ...INITIAL_STATE })
   const [errors, setErrors] = useState<Errors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -62,10 +80,23 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
         Notes: editRecord.Notes || '',
       })
     } else if (open) {
-      setForm({ ...INITIAL_STATE })
+      // Fresh "add new" form, optionally seeded with prefillValues from a
+      // CTA like "Add payment to <Service>" so the user doesn't have to
+      // re-type the category / amount.
+      setForm({
+        ...INITIAL_STATE,
+        ...(prefillValues
+          ? Object.fromEntries(
+              Object.entries(prefillValues).map(([k, v]) => [
+                k,
+                typeof v === 'number' ? String(v) : v,
+              ]),
+            )
+          : {}),
+      } as typeof INITIAL_STATE)
     }
     setErrors({})
-  }, [open, editRecord])
+  }, [open, editRecord, prefillValues])
 
   function updateField(field: string, value: string | number | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }))

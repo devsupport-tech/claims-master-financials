@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Save, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -74,6 +75,14 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
     () => formatCurrency(checklist.totalSubmittedAmount),
     [checklist.totalSubmittedAmount]
   );
+
+  // Header is generic — each row carries a Bill chip indicating Insurance
+  // vs Client, so we don't need to label the whole table one way or another.
+  const headerLabels = {
+    title: 'Submitted',
+    total: 'Total Submitted',
+    subtitle: 'Track which deliverables were submitted and how much was sent. Bill chip on each row indicates Insurance vs Client.',
+  };
 
   const updateChecklistItem = (
     key: InsuranceSubmissionChecklistKey,
@@ -160,15 +169,15 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
           <div>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5" />
-              Submitted to Insurance
+              {headerLabels.title}
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Track which deliverables were submitted and how much was sent to the carrier.
+              {headerLabels.subtitle}
             </p>
           </div>
           <div className="rounded-lg border px-4 py-3 text-right">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Total Sent to Insurance
+              {headerLabels.total}
             </p>
             <p className="text-2xl font-bold">{totalSentToInsurance}</p>
           </div>
@@ -181,6 +190,7 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
               <TableRow>
                 <TableHead className="w-[90px]">Sent</TableHead>
                 <TableHead>Item</TableHead>
+                <TableHead className="w-[260px]">Service Lifecycle</TableHead>
                 <TableHead className="w-[170px]">Submitted Date</TableHead>
                 <TableHead className="w-[180px]">Amount Sent</TableHead>
                 <TableHead className="w-[180px]">Amount Released</TableHead>
@@ -200,6 +210,42 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{item.label}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {item.billTo && (
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.billTo === 'Insurance'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-purple-50 text-purple-700 border-purple-200'
+                          }
+                        >
+                          Bill: {item.billTo}
+                        </Badge>
+                      )}
+                      {item.operationStatus && (
+                        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                          Op: {item.operationStatus}
+                        </Badge>
+                      )}
+                      {item.estimateStatus && (
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.estimateStatus === 'Approved'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }
+                        >
+                          Est: {item.estimateStatus}
+                        </Badge>
+                      )}
+                      {!item.billTo && !item.operationStatus && !item.estimateStatus && (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <input

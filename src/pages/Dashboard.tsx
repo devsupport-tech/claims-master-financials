@@ -12,6 +12,8 @@ import {
   PortfolioOverview,
   ClaimsTable,
   InsuranceSubmissionTracker,
+  FinancialReportTab,
+  SidebarSearch,
 } from '@/components/financial';
 import {
   getClaimFinancialSummary,
@@ -31,7 +33,6 @@ import {
   DollarSign,
   FileText,
   Building2,
-  Wrench,
   Receipt,
   RefreshCw,
   Plus,
@@ -102,6 +103,10 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [editingReport, setEditingReport] = useState<any>(null);
   const [editingRelease, setEditingRelease] = useState<any>(null);
   const [editingCost, setEditingCost] = useState<any>(null);
+  // Prefill state for new ledger entries (e.g. "Add payment to Water Mitigation"
+  // CTAs that pre-seed Category + Amount). Distinct from editingLedger so the
+  // form stays in CREATE mode and submission calls createLedgerEntry.
+  const [prefillLedger, setPrefillLedger] = useState<Record<string, unknown> | null>(null);
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -416,6 +421,17 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
           </Button>
         </div>
 
+        {/* Persistent claim search — visible regardless of view (overview /
+            claims / claim-detail). Reuses the in-memory `claims` state and
+            the existing handleSelectClaim flow so behavior matches
+            ClaimsTable's row click. */}
+        <SidebarSearch
+          claims={claims}
+          collapsed={collapsed}
+          onExpand={() => setCollapsed(false)}
+          onSelect={handleSelectClaim}
+        />
+
         {/* Nav Items */}
         <div className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
           <Button
@@ -579,7 +595,36 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                 {/* Financial Summary */}
                 {summary && <FinancialSummaryCard summary={summary} />}
 
-                {/* Tabbed Content */}
+                {/* Per-service editor — the canonical place to edit Approved
+                    Estimate Amount, supplement, and add payments. Lives
+                    inline on the claim page (not behind a tab) because it's
+                    the primary action surface for this app. */}
+                {selectedClaim && (
+                  <FinancialReportTab
+                    claimsMasterRecordId={selectedClaim.id}
+                    onAddPayment={(defaults) =>
+                      ensureBridgeAndOpenForm(() => {
+                        // CREATE mode with prefill — NOT edit mode (which
+                        // requires a real record id and would 500 on save).
+                        setEditingLedger(null);
+                        setPrefillLedger({
+                          'Entry Name': `${defaults.category} — payment`,
+                          'Entry Type': 'Insurance Payment',
+                          Direction: 'Inflow',
+                          Amount: defaults.suggestedAmount ?? 0,
+                          Date: new Date().toISOString().slice(0, 10),
+                          Category: defaults.category,
+                          Reconciled: false,
+                        });
+                        setShowLedgerForm(true);
+                      })
+                    }
+                  />
+                )}
+
+                {/* Supporting tabs — ledger entries, adjuster reports, mortgage
+                    releases, raw job costing trades, and the submissions
+                    checklist. Editing of service $ fields happens above. */}
                 <Tabs defaultValue="ledger" className="space-y-4">
                   <TabsList>
                     <TabsTrigger value="ledger" className="flex items-center gap-2">
@@ -595,7 +640,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                       Mortgage
                     </TabsTrigger>
                     <TabsTrigger value="costing" className="flex items-center gap-2">
-                      <Wrench className="h-4 w-4" />
+                      <Hammer className="h-4 w-4" />
                       Job Costing
                     </TabsTrigger>
                     <TabsTrigger value="submissions" className="flex items-center gap-2">
@@ -683,10 +728,14 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
         <>
           <LedgerEntryForm
             open={showLedgerForm}
-            onOpenChange={handleLedgerFormClose}
+            onOpenChange={(o) => {
+              if (!o) setPrefillLedger(null);
+              handleLedgerFormClose(o);
+            }}
             claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingLedger}
+            prefillValues={prefillLedger ?? undefined}
           />
           <AdjusterReportForm
             open={showReportForm}
