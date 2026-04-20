@@ -217,7 +217,10 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
                         <Badge
                           variant="outline"
                           className={
-                            item.billTo === 'Insurance'
+                            // "Client" → purple; any carrier name (or legacy
+                            // "Insurance") → blue. VEC now writes carrier
+                            // names so the literal check was stale.
+                            item.billTo !== 'Client'
                               ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : 'bg-purple-50 text-purple-700 border-purple-200'
                           }

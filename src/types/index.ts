@@ -64,8 +64,11 @@ export interface InsuranceSubmissionChecklistItem {
    * Display-only mirrors of the per-service lifecycle. Populated from the
    * Module row at load time; not persisted in the Checklist JSON (the source
    * of truth lives on the Module + Project rows).
+   *
+   * Bill To is the carrier's display name ("Allstate", "State Farm", …) or
+   * the literal "Client". Any truthy non-"Client" value is insurance-billed.
    */
-  billTo?: 'Insurance' | 'Client';
+  billTo?: string;
   operationStatus?: string;
   estimateStatus?: string;
 }
@@ -189,7 +192,8 @@ export interface JobCost {
 export interface ServiceLifecycleView {
   moduleRecordId: string;
   serviceName: string;
-  billTo?: 'Insurance' | 'Client';
+  /** Carrier display name ("Allstate", "State Farm") or "Client". Any truthy non-"Client" value is insurance-billed. */
+  billTo?: string;
   operationStatus?: string;
   estimateStatus?: string;
   approvedEstimateAmount: number;

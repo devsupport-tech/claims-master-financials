@@ -113,10 +113,14 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
   );
   const badge = paymentStatusBadge(derived.status);
 
-  const billToTone =
-    view.billTo === 'Insurance'
-      ? 'bg-blue-50 text-blue-700 border-blue-200'
-      : 'bg-purple-50 text-purple-700 border-purple-200';
+  // "Client" = client-billed (purple). Any other truthy value — a carrier
+  // name like "Allstate" or the legacy "Insurance" literal — is
+  // insurance-billed (blue). Keeps the blue tone working now that VEC writes
+  // carrier names instead of the literal "Insurance".
+  const isInsuranceBilled = Boolean(view.billTo) && view.billTo !== 'Client';
+  const billToTone = isInsuranceBilled
+    ? 'bg-blue-50 text-blue-700 border-blue-200'
+    : 'bg-purple-50 text-purple-700 border-purple-200';
   const badgeTone =
     badge.tone === 'success'
       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'

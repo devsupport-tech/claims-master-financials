@@ -65,7 +65,8 @@ export function buildChecklistFromModules(
   modules: {
     id: string;
     'Module Name': string;
-    'Bill To'?: 'Insurance' | 'Client';
+    /** Carrier display name or "Client". Any truthy non-"Client" value is insurance-billed. */
+    'Bill To'?: string;
     'Operation Status'?: string;
     'Estimate Status'?: string;
   }[],

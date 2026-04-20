@@ -156,7 +156,8 @@ export interface ModuleRow {
   'Payment Amount': number;
   // Per-service lifecycle mirrors (added by airtable-schema-sync). Optional so
   // older rows without the new fields still parse cleanly.
-  'Bill To'?: 'Insurance' | 'Client';
+  // Bill To holds a carrier display name ("Allstate", …) or the literal "Client".
+  'Bill To'?: string;
   'Operation Status'?: string;
   'Estimate Status'?: string;
   'Approved Estimate Amount'?: number;
@@ -194,7 +195,7 @@ export async function getModulesForClaim(claimRecordId: string): Promise<ModuleR
       Status: readSelect(r.fields['Status']) || '',
       Vendor: (r.fields['Vendor'] as string) || '',
       'Payment Amount': (r.fields['Payment Amount'] as number) || 0,
-      'Bill To': readSelect(r.fields['Bill To']) as 'Insurance' | 'Client' | undefined,
+      'Bill To': readSelect(r.fields['Bill To']),
       'Operation Status': readSelect(r.fields['Operation Status']),
       'Estimate Status': readSelect(r.fields['Estimate Status']),
       // IMPORTANT: keep these as undefined when Airtable doesn't return the

@@ -48,7 +48,12 @@ import { airtablePat, baseIdFor, type AppKey } from "./bases.js";
 // Types
 // ---------------------------------------------------------------------------
 
-export type BillTo = "Insurance" | "Client";
+// Bill To stores the carrier's display name (e.g. "Allstate") or the literal
+// "Client". VEC widened this from `"Insurance" | "Client"` so services can be
+// billed to a specific carrier when a claim has multiple insurances. Legacy
+// records may still hold "Insurance"; any truthy non-"Client" value is
+// treated as insurance-billed in the UI.
+export type BillTo = string;
 export type SupplementInvoiceMode = "Append to invoice" | "Separate invoice";
 export type OperationStatus =
   | "Not Started"
