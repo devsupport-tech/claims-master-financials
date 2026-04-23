@@ -14,7 +14,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, FileText, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ServiceLifecycleCard } from './ServiceLifecycleCard';
 import { getModulesForClaim, type ModuleRow } from '@/lib/claims-master';
 import { getFinancialLedger, getJobCosting } from '@/lib/airtable';
 import type { JobCost, LedgerEntry, ServiceLifecycleView } from '@/types';
@@ -23,6 +22,9 @@ interface Props {
   claimsMasterRecordId: string;
   /** Optional handler that opens the FinancialLedger Add Entry form pre-filled. */
   onAddPayment?: (defaults: { category: string; suggestedAmount?: number }) => void;
+  /** Bubbles the freshly-built lifecycle views up so a parent can render
+   *  per-service tabs without re-fetching. */
+  onViewsChange?: (views: ServiceLifecycleView[]) => void;
 }
 
 interface SupplementSnapshot {
@@ -104,6 +106,7 @@ function buildLifecycleViews(
       billTo: m['Bill To'],
       operationStatus: m['Operation Status'],
       estimateStatus: m['Estimate Status'],
+      submittedEstimateAmount: Number(j?.['Submitted Estimate Amount'] ?? 0),
       approvedEstimateAmount:
         Number(m['Approved Estimate Amount'] ?? j?.['Approved Estimate Amount'] ?? 0),
       hasSupplement: Boolean(m['Has Supplement'] ?? j?.['Has Supplement']),
@@ -120,7 +123,7 @@ function buildLifecycleViews(
   });
 }
 
-export function FinancialReportTab({ claimsMasterRecordId, onAddPayment }: Props) {
+export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViewsChange }: Props) {
   const [views, setViews] = useState<ServiceLifecycleView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -169,6 +172,7 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment }: Props
           : [];
       const built = buildLifecycleViews(modules, jobCostRows, ledgerRows);
       setViews(built);
+      onViewsChange?.(built);
 
       // Diff supplement state vs last snapshot to surface "supplement added" banners.
       const previous = previousSnapshotRef.current;
@@ -322,15 +326,8 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment }: Props
         </Card>
       )}
 
-      {views.map((v) => (
-        <ServiceLifecycleCard
-          key={v.moduleRecordId}
-          view={v}
-          onAddPayment={onAddPayment}
-        />
-      ))}
-      {/* The aggregated Financial Ledger and Job Costing tables live in the
-          tabs below — duplicating them here was redundant. */}
+      {/* Per-service ServiceLifecycleCards live in the tabs below — one tab
+          per service. Rendering them here too would duplicate the surface. */}
     </div>
   );
 }

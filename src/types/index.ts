@@ -174,6 +174,7 @@ export interface JobCost {
   'Scope Description'?: string;
   Notes?: string;
   // Per-service lifecycle (added by airtable-schema-sync)
+  'Submitted Estimate Amount'?: number;
   'Approved Estimate Amount'?: number;
   'Has Supplement'?: boolean;
   'Supplement Approved Amount'?: number;
@@ -197,6 +198,7 @@ export interface ServiceLifecycleView {
   billTo?: string;
   operationStatus?: string;
   estimateStatus?: string;
+  submittedEstimateAmount: number;
   approvedEstimateAmount: number;
   hasSupplement: boolean;
   supplementApprovedAmount: number;
@@ -206,6 +208,42 @@ export interface ServiceLifecycleView {
   jobCosting?: JobCost;
   supplementJobCosting?: JobCost;
   payments: LedgerEntry[];
+}
+
+export type ProjectExpenseCategory =
+  | 'Third party contractors'
+  | 'Materials'
+  | 'Labor Cost'
+  | 'General Expenses and Outflows'
+  | 'Others';
+
+export interface ProjectExpense {
+  id: string;
+  'Cost Name': string;
+  'Project Expense Category'?: ProjectExpenseCategory;
+  'Billing Entity'?: string;
+  Amount?: number;
+  'Invoice Number'?: string;
+  'Invoice Date'?: string;
+  'Scope Notes'?: string;
+  'Module Record ID'?: string;
+  Claim?: string[];
+  'Cost Payments'?: string[];
+  _createdTime?: string;
+}
+
+export type CostPaymentMethod = 'Check' | 'Cash' | 'Wire' | 'Credit Card' | 'Other';
+
+export interface CostPayment {
+  id: string;
+  'Payment Name': string;
+  'Project Expense'?: string[];
+  Amount?: number;
+  'Payment Date'?: string;
+  Method?: CostPaymentMethod;
+  'Check Number'?: string;
+  Notes?: string;
+  _createdTime?: string;
 }
 
 export interface FinancialSummary {

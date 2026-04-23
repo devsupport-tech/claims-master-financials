@@ -11,7 +11,7 @@
  * VEC and Rest Ops just display these values and link out to this card.
  */
 import { useEffect, useState, useMemo } from 'react';
-import { ArrowRight, DollarSign, Save, Wrench } from 'lucide-react';
+import { DollarSign, Save, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,11 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrency } from '@/lib/utils';
 import { derivePaymentStatus, paymentStatusBadge } from '@/lib/payment-status';
-import {
-  approveEstimate,
-  setSupplement,
-  type SupplementInvoiceMode,
-} from '@/services/lifecycle-sync';
+import { approveEstimate, setSupplement } from '@/services/lifecycle-sync';
 import type { ServiceLifecycleView } from '@/types';
 
 interface Props {
@@ -42,24 +38,31 @@ interface Props {
 export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
   // Editable state — seeded from the view, kept in sync when the parent
   // re-fetches and the view object changes.
+  const [submittedAmt, setSubmittedAmt] = useState<number>(view.submittedEstimateAmount);
   const [approvedAmt, setApprovedAmt] = useState<number>(view.approvedEstimateAmount);
   const [hasSup, setHasSup] = useState<boolean>(view.hasSupplement);
-  const [supAmt, setSupAmt] = useState<number>(view.supplementApprovedAmount);
-  const [supMode, setSupMode] = useState<SupplementInvoiceMode>(view.supplementInvoiceMode);
-  const [supLabel, setSupLabel] = useState<string>(
-    view.supplementSeparateInvoiceLabel ?? `${view.serviceName} Supplement`,
+  // "Final Approved Amount" = Approved Estimate + Supplement. The user types
+  // the carrier's new full figure; we derive the supplement increment.
+  const [finalApprovedAmt, setFinalApprovedAmt] = useState<number>(
+    view.approvedEstimateAmount + view.supplementApprovedAmount,
   );
   const [busy, setBusy] = useState<'approve' | 'supplement' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  useEffect(() => setSubmittedAmt(view.submittedEstimateAmount), [view.submittedEstimateAmount]);
   useEffect(() => setApprovedAmt(view.approvedEstimateAmount), [view.approvedEstimateAmount]);
   useEffect(() => setHasSup(view.hasSupplement), [view.hasSupplement]);
-  useEffect(() => setSupAmt(view.supplementApprovedAmount), [view.supplementApprovedAmount]);
-  useEffect(() => setSupMode(view.supplementInvoiceMode), [view.supplementInvoiceMode]);
   useEffect(() => {
-    if (view.supplementSeparateInvoiceLabel) setSupLabel(view.supplementSeparateInvoiceLabel);
-  }, [view.supplementSeparateInvoiceLabel]);
+    setFinalApprovedAmt(view.approvedEstimateAmount + view.supplementApprovedAmount);
+  }, [view.approvedEstimateAmount, view.supplementApprovedAmount]);
+
+  const supplementIncrement = Math.max(0, finalApprovedAmt - approvedAmt);
+  const totalClaimValue = approvedAmt + (hasSup ? supplementIncrement : 0);
+  const comparativesDirty =
+    submittedAmt !== view.submittedEstimateAmount || approvedAmt !== view.approvedEstimateAmount;
+  const supplementPaid =
+    hasSup && supplementIncrement > 0 && view.paidAmount >= approvedAmt + supplementIncrement;
 
   const handleSaveApproved = async () => {
     if (!approvedAmt || approvedAmt <= 0) {
@@ -70,11 +73,14 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
     setError(null);
     setSuccess(null);
     try {
-      await approveEstimate(view.moduleRecordId, { approvedAmount: approvedAmt });
-      setSuccess('Approved amount saved and synced to all bases.');
+      await approveEstimate(view.moduleRecordId, {
+        approvedAmount: approvedAmt,
+        submittedAmount: submittedAmt,
+      });
+      setSuccess('Comparatives saved and synced to all bases.');
       onChanged?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save approved amount');
+      setError(e instanceof Error ? e.message : 'Failed to save comparatives');
     } finally {
       setBusy(null);
     }
@@ -85,11 +91,12 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
     setError(null);
     setSuccess(null);
     try {
+      // Always Append mode — the user enters the Final Approved Amount, and
+      // we derive the supplement increment (Final − Approved Estimate).
       await setSupplement(view.moduleRecordId, {
         hasSupplement: hasSup,
-        amount: hasSup ? supAmt : undefined,
-        mode: hasSup ? supMode : undefined,
-        separateInvoiceLabel: hasSup && supMode === 'Separate invoice' ? supLabel : undefined,
+        amount: hasSup ? supplementIncrement : undefined,
+        mode: hasSup ? 'Append to invoice' : undefined,
       });
       setSuccess(hasSup ? 'Supplement saved.' : 'Supplement removed.');
       onChanged?.();
@@ -172,42 +179,110 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Editable: Approved Estimate Amount — the canonical $ field. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-          <div>
-            <Label htmlFor={`approved-${view.moduleRecordId}`} className="text-xs uppercase tracking-wide text-muted-foreground">
-              Approved Estimate Amount
-            </Label>
-            <Input
-              id={`approved-${view.moduleRecordId}`}
-              type="number"
-              min={0}
-              step={0.01}
-              value={approvedAmt}
-              onChange={(e) => setApprovedAmt(Number(e.target.value))}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Paid</p>
-            <p className="mt-2 text-lg font-semibold text-emerald-700">
-              {formatCurrency(view.paidAmount)}
+        {/* Comparatives — Submitted vs Approved estimate, with the rolled-up
+            Total Claim Value (Approved + Supplement). Record Payment lives
+            inline so the user can log a payment against the figure they're
+            looking at. */}
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Comparatives
             </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
-            <p className="mt-2 text-lg font-semibold">{formatCurrency(derived.remaining)}</p>
-          </div>
-          <div className="flex items-end">
             <Button
               onClick={handleSaveApproved}
-              disabled={busy === 'approve' || approvedAmt === view.approvedEstimateAmount}
+              disabled={busy === 'approve' || !comparativesDirty}
               size="sm"
               className="gap-2"
             >
               <Save className="h-4 w-4" />
               {busy === 'approve' ? 'Saving…' : view.approvedEstimateAmount > 0 ? 'Re-sync' : 'Approve & sync'}
             </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <Label htmlFor={`submitted-${view.moduleRecordId}`} className="text-xs uppercase tracking-wide text-muted-foreground">
+                Submitted Estimate Amount
+              </Label>
+              <Input
+                id={`submitted-${view.moduleRecordId}`}
+                type="number"
+                min={0}
+                step={0.01}
+                value={submittedAmt}
+                onChange={(e) => setSubmittedAmt(Number(e.target.value))}
+                className="mt-1"
+                placeholder="First estimate sent to carrier"
+              />
+            </div>
+            <div>
+              <Label htmlFor={`approved-${view.moduleRecordId}`} className="text-xs uppercase tracking-wide text-muted-foreground">
+                Approved Estimate Amount
+              </Label>
+              <div className="mt-1 flex items-center gap-2">
+                <Input
+                  id={`approved-${view.moduleRecordId}`}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={approvedAmt}
+                  onChange={(e) => setApprovedAmt(Number(e.target.value))}
+                  className="flex-1"
+                />
+                {onAddPayment && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 whitespace-nowrap"
+                    onClick={() =>
+                      onAddPayment({
+                        category: view.serviceName,
+                        suggestedAmount: derived.remaining,
+                      })
+                    }
+                  >
+                    <DollarSign className="h-4 w-4" />
+                    Record Payment
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Total Claim Value
+              </p>
+              <p className="mt-2 text-2xl font-bold">{formatCurrency(totalClaimValue)}</p>
+              <p className="text-xs text-muted-foreground">
+                Approved + {hasSup ? `supplement (${formatCurrency(supplementIncrement)})` : '0 (no supplement)'}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Paid</p>
+              <p className="text-lg font-semibold text-emerald-700">
+                {formatCurrency(view.paidAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
+              <p className="text-lg font-semibold">{formatCurrency(derived.remaining)}</p>
+            </div>
+            {submittedAmt > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Approved vs Submitted
+                </p>
+                <p
+                  className={`text-lg font-semibold ${
+                    approvedAmt - submittedAmt >= 0 ? 'text-emerald-700' : 'text-red-600'
+                  }`}
+                >
+                  {approvedAmt - submittedAmt >= 0 ? '+' : ''}
+                  {formatCurrency(approvedAmt - submittedAmt)}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -222,7 +297,8 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
           </p>
         </div>
 
-        {/* Editable: Supplement on / off + amount + invoice mode + label. */}
+        {/* Supplement (always Append mode — user enters Final Approved
+            Amount and we derive the increment). */}
         <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
             <Checkbox
@@ -231,50 +307,60 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
               onChange={(e) => setHasSup(e.target.checked)}
             />
             <Label htmlFor={`supplement-${view.moduleRecordId}`} className="cursor-pointer font-medium">
-              Has Supplement
+              Add Supplement
             </Label>
           </div>
           {hasSup && (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Supplement Approved Amount
-                </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={supAmt}
-                  onChange={(e) => setSupAmt(Number(e.target.value))}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Invoice Mode
-                </Label>
-                <select
-                  value={supMode}
-                  onChange={(e) => setSupMode(e.target.value as SupplementInvoiceMode)}
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  <option value="Append to invoice">Append to invoice</option>
-                  <option value="Separate invoice">Separate invoice</option>
-                </select>
-              </div>
-              {supMode === 'Separate invoice' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Separate Invoice Label
+                    Final Approved Amount
                   </Label>
                   <Input
-                    type="text"
-                    value={supLabel}
-                    onChange={(e) => setSupLabel(e.target.value)}
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={finalApprovedAmt || ''}
+                    onChange={(e) => setFinalApprovedAmt(Number(e.target.value))}
                     className="mt-1"
+                    placeholder="Carrier's new total after supplement"
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Supplement amount = Final Approved Amount − Approved Estimate Amount ={' '}
+                    <span className="font-semibold">{formatCurrency(supplementIncrement)}</span>
+                  </p>
                 </div>
-              )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background p-3">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Supplement Amount: </span>
+                  <span className="font-semibold">{formatCurrency(supplementIncrement)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {onAddPayment && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      disabled={supplementIncrement <= 0}
+                      onClick={() =>
+                        onAddPayment({
+                          category: view.serviceName,
+                          suggestedAmount: supplementIncrement,
+                        })
+                      }
+                    >
+                      <DollarSign className="h-4 w-4" />
+                      Record Supplement Payment
+                    </Button>
+                  )}
+                  <Badge variant={supplementPaid ? 'success' : 'warning'}>
+                    Status: {supplementPaid ? 'Paid' : 'Pending'}
+                  </Badge>
+                </div>
+              </div>
             </div>
           )}
           <div className="mt-3 flex justify-end">
@@ -298,42 +384,6 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
           </p>
         )}
 
-        {onAddPayment && (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() =>
-                onAddPayment({
-                  category: view.serviceName,
-                  suggestedAmount: derived.remaining,
-                })
-              }
-            >
-              <DollarSign className="h-4 w-4" />
-              Add payment to {view.serviceName}
-              <ArrowRight className="h-3 w-3" />
-            </Button>
-            {view.hasSupplement && view.supplementInvoiceMode === 'Separate invoice' && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() =>
-                  onAddPayment({
-                    category: view.supplementSeparateInvoiceLabel || `${view.serviceName} Supplement`,
-                    suggestedAmount: view.supplementApprovedAmount,
-                  })
-                }
-              >
-                <DollarSign className="h-4 w-4" />
-                Add payment to supplement
-                <ArrowRight className="h-3 w-3" />
-              </Button>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   );

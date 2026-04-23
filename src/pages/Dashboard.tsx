@@ -15,6 +15,8 @@ import {
   FinancialReportTab,
   SidebarSearch,
   GeneralInfoCard,
+  ServiceLifecycleCard,
+  ProjectExpensesTable,
 } from '@/components/financial';
 import {
   getClaimFinancialSummary,
@@ -27,6 +29,10 @@ import {
   deleteMortgageRelease,
   deleteJobCost,
   getPortfolioOverview,
+  getProjectExpenses,
+  getCostPayments,
+  deleteProjectExpense,
+  deleteCostPayment,
 } from '@/lib/airtable';
 import type { PortfolioOverviewData } from '@/lib/airtable';
 import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster, getPaymentsLog } from '@/lib/claims-master';
@@ -48,16 +54,19 @@ import {
   Sun,
   Moon,
   ShieldCheck,
+  MoreHorizontal,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
   AdjusterReportForm,
   MortgageReleaseForm,
   JobCostForm,
+  ProjectExpenseForm,
+  CostPaymentForm,
 } from '@/components/forms';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost } from '@/types';
+import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost, ServiceLifecycleView, ProjectExpense, CostPayment } from '@/types';
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
@@ -99,12 +108,25 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [showCostForm, setShowCostForm] = useState(false);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [showCostPaymentForm, setShowCostPaymentForm] = useState(false);
 
   // Edit record states
   const [editingLedger, setEditingLedger] = useState<any>(null);
   const [editingReport, setEditingReport] = useState<any>(null);
   const [editingRelease, setEditingRelease] = useState<any>(null);
   const [editingCost, setEditingCost] = useState<any>(null);
+  const [editingExpense, setEditingExpense] = useState<ProjectExpense | null>(null);
+  // Which service (moduleRecordId) the Add/Edit Expense form is opened against.
+  const [expenseServiceContext, setExpenseServiceContext] = useState<{
+    moduleRecordId: string;
+    serviceName: string;
+  } | null>(null);
+  // Which expense row the Log Payment modal is logging against.
+  const [costPaymentTarget, setCostPaymentTarget] = useState<{
+    expense: ProjectExpense;
+    balanceDue: number;
+  } | null>(null);
   // Prefill state for new ledger entries (e.g. "Add payment to Water Mitigation"
   // CTAs that pre-seed Category + Amount). Distinct from editingLedger so the
   // form stays in CREATE mode and submission calls createLedgerEntry.
@@ -112,7 +134,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'ledger' | 'report' | 'release' | 'cost';
+    type: 'ledger' | 'report' | 'release' | 'cost' | 'expense' | 'cost-payment';
     record: any;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -127,6 +149,11 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [reports, setReports] = useState<AdjusterReport[]>([]);
   const [releases, setReleases] = useState<MortgageRelease[]>([]);
   const [costs, setCosts] = useState<JobCost[]>([]);
+  const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
+  const [costPayments, setCostPayments] = useState<CostPayment[]>([]);
+  // Lifecycle views are produced by FinancialReportTab from Modules+JobCosting+Ledger;
+  // bubbled up so the supporting tabs below can render one tab per service.
+  const [lifecycleViews, setLifecycleViews] = useState<ServiceLifecycleView[]>([]);
 
   // Load claims + overview on mount, then poll every 30s to keep data fresh.
   // Polling pauses while viewing a claim detail or while any create/edit dialog is open,
@@ -136,14 +163,14 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     const POLL_MS = 30_000;
     const id = setInterval(() => {
       if (view === 'claim-detail') return;
-      if (showLedgerForm || showReportForm || showReleaseForm || showCostForm) return;
-      if (editingLedger || editingReport || editingRelease || editingCost) return;
+      if (showLedgerForm || showReportForm || showReleaseForm || showCostForm || showExpenseForm || showCostPaymentForm) return;
+      if (editingLedger || editingReport || editingRelease || editingCost || editingExpense) return;
       if (deleteTarget) return;
       refreshAll(true);
     }, POLL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, showLedgerForm, showReportForm, showReleaseForm, showCostForm, editingLedger, editingReport, editingRelease, editingCost, deleteTarget]);
+  }, [view, showLedgerForm, showReportForm, showReleaseForm, showCostForm, showExpenseForm, showCostPaymentForm, editingLedger, editingReport, editingRelease, editingCost, editingExpense, deleteTarget]);
 
   async function refreshAll(silent = false) {
     if (!silent) {
@@ -190,6 +217,27 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     }
   }
 
+  // Open the Add Ledger Entry form pre-filled to record a payment against a
+  // specific service. Used by ServiceLifecycleCard "Add payment" CTAs from
+  // both the Financial Report section and the per-service supporting tabs.
+  function handleAddServicePayment(defaults: { category: string; suggestedAmount?: number }) {
+    ensureBridgeAndOpenForm(() => {
+      // CREATE mode with prefill — NOT edit mode (which requires a real
+      // record id and would 500 on save).
+      setEditingLedger(null);
+      setPrefillLedger({
+        'Entry Name': `${defaults.category} — payment`,
+        'Entry Type': 'Insurance Payment',
+        Direction: 'Inflow',
+        Amount: defaults.suggestedAmount ?? 0,
+        Date: new Date().toISOString().slice(0, 10),
+        Category: defaults.category,
+        Reconciled: false,
+      });
+      setShowLedgerForm(true);
+    });
+  }
+
   // Ensure financial record exists before opening a form (retry if bridge failed on claim select)
   async function ensureBridgeAndOpenForm(openFn: () => void) {
     if (financialRecordId) {
@@ -212,19 +260,39 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   async function loadClaimDetails(claimRecordId: string) {
     setIsLoadingDetails(true);
     try {
-      const [summaryData, ledgerData, reportsData, releasesData, costsData] = await Promise.all([
-        getClaimFinancialSummary(claimRecordId),
-        getFinancialLedger(claimRecordId),
-        getAdjusterReports(claimRecordId),
-        getMortgageReleases(claimRecordId),
-        getJobCosting(claimRecordId),
-      ]);
+      const [summaryData, ledgerData, reportsData, releasesData, costsData, expensesData] =
+        await Promise.all([
+          getClaimFinancialSummary(claimRecordId),
+          getFinancialLedger(claimRecordId),
+          getAdjusterReports(claimRecordId),
+          getMortgageReleases(claimRecordId),
+          getJobCosting(claimRecordId),
+          getProjectExpenses(claimRecordId),
+        ]);
 
       setSummary(summaryData as FinancialSummary);
       setLedger(ledgerData as LedgerEntry[]);
       setReports(reportsData as AdjusterReport[]);
       setReleases(releasesData as MortgageRelease[]);
       setCosts(costsData as JobCost[]);
+      setExpenses(expensesData as ProjectExpense[]);
+
+      // Cost Payments are pulled in a follow-up call and scoped client-side
+      // to the expenses we just fetched — the Airtable side can't filter by
+      // link-to-filtered-set in one round-trip.
+      const expenseIds = new Set((expensesData as ProjectExpense[]).map((e) => e.id));
+      if (expenseIds.size > 0) {
+        const all = (await getCostPayments()) as CostPayment[];
+        setCostPayments(
+          all.filter(
+            (p) =>
+              Array.isArray(p['Project Expense']) &&
+              p['Project Expense'].some((id) => expenseIds.has(id)),
+          ),
+        );
+      } else {
+        setCostPayments([]);
+      }
     } catch (error) {
       console.error('Failed to load claim details:', error);
     } finally {
@@ -292,6 +360,29 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     setDeleteTarget({ type: 'cost', record });
   }
 
+  function handleAddExpense(ctx: { moduleRecordId: string; serviceName: string }) {
+    ensureBridgeAndOpenForm(() => {
+      setEditingExpense(null);
+      setExpenseServiceContext(ctx);
+      setShowExpenseForm(true);
+    });
+  }
+
+  function handleEditExpense(expense: ProjectExpense, ctx: { moduleRecordId: string; serviceName: string }) {
+    setEditingExpense(expense);
+    setExpenseServiceContext(ctx);
+    setShowExpenseForm(true);
+  }
+
+  function handleDeleteExpense(expense: ProjectExpense) {
+    setDeleteTarget({ type: 'expense', record: expense });
+  }
+
+  function handleLogPaymentOnExpense(expense: ProjectExpense, balanceDue: number) {
+    setCostPaymentTarget({ expense, balanceDue });
+    setShowCostPaymentForm(true);
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -311,6 +402,14 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
           break;
         case 'cost':
           await deleteJobCost(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+        case 'expense':
+          await deleteProjectExpense(deleteTarget.record.id);
+          await handleDetailCreated();
+          break;
+        case 'cost-payment':
+          await deleteCostPayment(deleteTarget.record.id);
           await handleDetailCreated();
           break;
       }
@@ -336,6 +435,8 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
       report: 'adjuster report',
       release: 'mortgage release',
       cost: 'job cost',
+      expense: 'project expense',
+      'cost-payment': 'cost payment',
     }[deleteTarget.type];
     return {
       title: `Delete ${typeLabel}?`,
@@ -362,6 +463,19 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   function handleCostFormClose(open: boolean) {
     setShowCostForm(open);
     if (!open) setEditingCost(null);
+  }
+
+  function handleExpenseFormClose(open: boolean) {
+    setShowExpenseForm(open);
+    if (!open) {
+      setEditingExpense(null);
+      setExpenseServiceContext(null);
+    }
+  }
+
+  function handleCostPaymentFormClose(open: boolean) {
+    setShowCostPaymentForm(open);
+    if (!open) setCostPaymentTarget(null);
   }
 
   const selectedClaim = claims.find(c => c.id === selectedClaimId);
@@ -659,23 +773,8 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                 {selectedClaim && (
                   <FinancialReportTab
                     claimsMasterRecordId={selectedClaim.id}
-                    onAddPayment={(defaults) =>
-                      ensureBridgeAndOpenForm(() => {
-                        // CREATE mode with prefill — NOT edit mode (which
-                        // requires a real record id and would 500 on save).
-                        setEditingLedger(null);
-                        setPrefillLedger({
-                          'Entry Name': `${defaults.category} — payment`,
-                          'Entry Type': 'Insurance Payment',
-                          Direction: 'Inflow',
-                          Amount: defaults.suggestedAmount ?? 0,
-                          Date: new Date().toISOString().slice(0, 10),
-                          Category: defaults.category,
-                          Reconciled: false,
-                        });
-                        setShowLedgerForm(true);
-                      })
-                    }
+                    onViewsChange={setLifecycleViews}
+                    onAddPayment={handleAddServicePayment}
                   />
                 )}
 
@@ -685,30 +784,29 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                 {/* Remaining summary cards — Outstanding, Profit, Payment Sources, Job Costing */}
                 {summary && <FinancialSummaryCard summary={summary} variant="rest" />}
 
-                {/* Supporting tabs — ledger entries, adjuster reports, mortgage
-                    releases, raw job costing trades, and the submissions
-                    checklist. Editing of service $ fields happens above. */}
+                {/* Supporting tabs — Ledger first, then one tab per service
+                    (Water Mitigation, Rebuild, etc.) sourced from the lifecycle
+                    views bubbled up by FinancialReportTab, and a "More" tab
+                    that holds Adjuster Reports / Mortgage / Job Costing /
+                    Submissions for occasional access. */}
                 <Tabs defaultValue="ledger" className="space-y-4">
-                  <TabsList>
+                  <TabsList className="flex-wrap h-auto">
                     <TabsTrigger value="ledger" className="flex items-center gap-2">
                       <Receipt className="h-4 w-4" />
                       Ledger
                     </TabsTrigger>
-                    <TabsTrigger value="reports" className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Adjuster Reports
-                    </TabsTrigger>
-                    <TabsTrigger value="mortgage" className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      Mortgage
-                    </TabsTrigger>
-                    <TabsTrigger value="costing" className="flex items-center gap-2">
-                      <Hammer className="h-4 w-4" />
-                      Job Costing
-                    </TabsTrigger>
-                    <TabsTrigger value="submissions" className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4" />
-                      Submissions
+                    {lifecycleViews.map((v) => (
+                      <TabsTrigger
+                        key={v.moduleRecordId}
+                        value={v.moduleRecordId}
+                        className="flex items-center gap-2"
+                      >
+                        {v.serviceName}
+                      </TabsTrigger>
+                    ))}
+                    <TabsTrigger value="more" className="flex items-center gap-2">
+                      <MoreHorizontal className="h-4 w-4" />
+                      More
                     </TabsTrigger>
                   </TabsList>
 
@@ -728,56 +826,102 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="reports">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingReport(null); setShowReportForm(true); })}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Report
-                        </Button>
-                      </div>
-                      <AdjusterReportsTracker
-                        reports={reports}
-                        onEdit={handleEditReport}
-                        onDelete={handleDeleteReport}
-                      />
-                    </div>
-                  </TabsContent>
+                  {lifecycleViews.map((v) => {
+                    const serviceExpenses = expenses.filter(
+                      (e) => e['Module Record ID'] === v.moduleRecordId,
+                    );
+                    const serviceCtx = { moduleRecordId: v.moduleRecordId, serviceName: v.serviceName };
+                    return (
+                      <TabsContent key={v.moduleRecordId} value={v.moduleRecordId}>
+                        <div className="space-y-4">
+                          <ServiceLifecycleCard view={v} onAddPayment={handleAddServicePayment} />
+                          <ProjectExpensesTable
+                            serviceName={v.serviceName}
+                            expenses={serviceExpenses}
+                            payments={costPayments}
+                            onAdd={() => handleAddExpense(serviceCtx)}
+                            onEdit={(expense) => handleEditExpense(expense, serviceCtx)}
+                            onDelete={handleDeleteExpense}
+                            onLogPayment={handleLogPaymentOnExpense}
+                          />
+                        </div>
+                      </TabsContent>
+                    );
+                  })}
 
-                  <TabsContent value="mortgage">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingRelease(null); setShowReleaseForm(true); })}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Release
-                        </Button>
-                      </div>
-                      <MortgageReleaseTracker
-                        releases={releases}
-                        onEdit={handleEditRelease}
-                        onDelete={handleDeleteRelease}
-                      />
-                    </div>
-                  </TabsContent>
+                  <TabsContent value="more">
+                    <Tabs defaultValue="reports" className="space-y-4">
+                      <TabsList>
+                        <TabsTrigger value="reports" className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Adjuster Reports
+                        </TabsTrigger>
+                        <TabsTrigger value="mortgage" className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          Mortgage
+                        </TabsTrigger>
+                        <TabsTrigger value="costing" className="flex items-center gap-2">
+                          <Hammer className="h-4 w-4" />
+                          Job Costing
+                        </TabsTrigger>
+                        <TabsTrigger value="submissions" className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4" />
+                          Submissions
+                        </TabsTrigger>
+                      </TabsList>
 
-                  <TabsContent value="costing">
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingCost(null); setShowCostForm(true); })}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Cost
-                        </Button>
-                      </div>
-                      <JobCostingTable
-                        costs={costs}
-                        onEdit={handleEditCost}
-                        onDelete={handleDeleteCost}
-                      />
-                    </div>
-                  </TabsContent>
+                      <TabsContent value="reports">
+                        <div className="space-y-4">
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingReport(null); setShowReportForm(true); })}>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Report
+                            </Button>
+                          </div>
+                          <AdjusterReportsTracker
+                            reports={reports}
+                            onEdit={handleEditReport}
+                            onDelete={handleDeleteReport}
+                          />
+                        </div>
+                      </TabsContent>
 
-                  <TabsContent value="submissions">
-                    {selectedClaim && <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />}
+                      <TabsContent value="mortgage">
+                        <div className="space-y-4">
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingRelease(null); setShowReleaseForm(true); })}>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Release
+                            </Button>
+                          </div>
+                          <MortgageReleaseTracker
+                            releases={releases}
+                            onEdit={handleEditRelease}
+                            onDelete={handleDeleteRelease}
+                          />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="costing">
+                        <div className="space-y-4">
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingCost(null); setShowCostForm(true); })}>
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Cost
+                            </Button>
+                          </div>
+                          <JobCostingTable
+                            costs={costs}
+                            onEdit={handleEditCost}
+                            onDelete={handleDeleteCost}
+                          />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="submissions">
+                        {selectedClaim && <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />}
+                      </TabsContent>
+                    </Tabs>
                   </TabsContent>
                 </Tabs>
               </div>
@@ -820,6 +964,22 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
             claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingCost}
+          />
+          <ProjectExpenseForm
+            open={showExpenseForm}
+            onOpenChange={handleExpenseFormClose}
+            claimRecordId={financialRecordId || ''}
+            moduleRecordId={expenseServiceContext?.moduleRecordId || ''}
+            serviceName={expenseServiceContext?.serviceName || ''}
+            onSuccess={handleDetailCreated}
+            editRecord={editingExpense}
+          />
+          <CostPaymentForm
+            open={showCostPaymentForm}
+            onOpenChange={handleCostPaymentFormClose}
+            expense={costPaymentTarget?.expense ?? null}
+            balanceDue={costPaymentTarget?.balanceDue ?? 0}
+            onSuccess={handleDetailCreated}
           />
         </>
       )}

@@ -46,6 +46,8 @@ export type SupplementInvoiceMode = 'Append to invoice' | 'Separate invoice';
 
 export interface ApproveEstimatePayload {
   approvedAmount: number;
+  /** Optional initial estimate the contractor submitted to the carrier. */
+  submittedAmount?: number;
   approvedDateISO?: string;
 }
 

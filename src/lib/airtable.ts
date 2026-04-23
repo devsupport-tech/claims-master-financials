@@ -78,6 +78,8 @@ const TABLES = {
   ADJUSTER_REPORTS: 'Adjuster Reports',
   MORTGAGE_RELEASES: 'Mortgage Releases',
   JOB_COSTING: 'Job Costing',
+  PROJECT_EXPENSES: 'Project Expenses',
+  COST_PAYMENTS: 'Cost Payments',
 };
 
 // ==========================================
@@ -234,6 +236,68 @@ export async function updateJobCost(recordId: string, data: Record<string, any>)
 
 export async function deleteJobCost(recordId: string) {
   await base(TABLES.JOB_COSTING).destroy(recordId);
+}
+
+// ==========================================
+// PROJECT EXPENSES (per-service cost rows)
+// ==========================================
+
+export async function getProjectExpenses(claimRecordId?: string) {
+  const records = await base(TABLES.PROJECT_EXPENSES)
+    .select({ sort: [{ field: 'Invoice Date', direction: 'desc' }] })
+    .all();
+  const mapped = records.map((record) => ({
+    id: record.id,
+    _createdTime: (record as any)._rawJson?.createdTime as string | undefined,
+    ...record.fields,
+  }));
+  if (!claimRecordId) return mapped;
+  return mapped.filter(
+    (r: any) => Array.isArray(r.Claim) && r.Claim.includes(claimRecordId),
+  );
+}
+
+export async function createProjectExpense(data: Record<string, any>) {
+  const record = await base(TABLES.PROJECT_EXPENSES).create(data);
+  return { id: record.id, ...record.fields };
+}
+
+export async function updateProjectExpense(recordId: string, data: Record<string, any>) {
+  const record = await base(TABLES.PROJECT_EXPENSES).update(recordId, data);
+  return { id: record.id, ...record.fields };
+}
+
+export async function deleteProjectExpense(recordId: string) {
+  await base(TABLES.PROJECT_EXPENSES).destroy(recordId);
+}
+
+// ==========================================
+// COST PAYMENTS (per-expense payment history)
+// ==========================================
+
+export async function getCostPayments(projectExpenseId?: string) {
+  const records = await base(TABLES.COST_PAYMENTS)
+    .select({ sort: [{ field: 'Payment Date', direction: 'desc' }] })
+    .all();
+  const mapped = records.map((record) => ({
+    id: record.id,
+    _createdTime: (record as any)._rawJson?.createdTime as string | undefined,
+    ...record.fields,
+  }));
+  if (!projectExpenseId) return mapped;
+  return mapped.filter(
+    (r: any) =>
+      Array.isArray(r['Project Expense']) && r['Project Expense'].includes(projectExpenseId),
+  );
+}
+
+export async function createCostPayment(data: Record<string, any>) {
+  const record = await base(TABLES.COST_PAYMENTS).create(data);
+  return { id: record.id, ...record.fields };
+}
+
+export async function deleteCostPayment(recordId: string) {
+  await base(TABLES.COST_PAYMENTS).destroy(recordId);
 }
 
 // ==========================================

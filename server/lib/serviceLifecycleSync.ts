@@ -101,6 +101,7 @@ export interface JobCostingRow {
   fields: {
     "Cost Name"?: string;
     "Trade Category"?: string;
+    "Submitted Estimate Amount"?: number;
     "Approved Estimate Amount"?: number;
     "Has Supplement"?: boolean;
     "Supplement Approved Amount"?: number;
@@ -449,6 +450,8 @@ export async function updateService(
 
 export interface ApproveEstimateInput {
   approvedAmount: number;
+  /** Optional initial estimate the contractor submitted to the carrier. */
+  submittedAmount?: number;
   /** Optional override for who paid; defaults to today. */
   approvedDateISO?: string;
 }
@@ -489,6 +492,9 @@ export async function approveEstimate(
   if (existing) {
     jobCosting = (await updateRow("FINANCIALS", TABLE.jobCosting, existing.id, {
       "Approved Estimate Amount": input.approvedAmount,
+      ...(input.submittedAmount !== undefined
+        ? { "Submitted Estimate Amount": input.submittedAmount }
+        : {}),
       "Trade Category": moduleType,
       "Module Record ID": moduleRecordId,
     })) as JobCostingRow;
@@ -502,6 +508,9 @@ export async function approveEstimate(
       "Cost Name": `${moduleType} — ${moduleRecordId.slice(-6)}`,
       "Trade Category": moduleType,
       "Approved Estimate Amount": input.approvedAmount,
+      ...(input.submittedAmount !== undefined
+        ? { "Submitted Estimate Amount": input.submittedAmount }
+        : {}),
       "Invoice Date": today,
       "Module Record ID": moduleRecordId,
       ...(financialsClaimRecord ? { Claim: [financialsClaimRecord] } : {}),

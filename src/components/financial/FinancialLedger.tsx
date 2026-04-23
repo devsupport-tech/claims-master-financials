@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Receipt, ArrowUpCircle, ArrowDownCircle, CheckCircle, Pencil, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Receipt, ArrowUpCircle, ArrowDownCircle, CheckCircle, Pencil, Trash2, Scale } from 'lucide-react';
 import type { LedgerEntry } from '@/types';
 
 interface FinancialLedgerProps {
@@ -42,58 +43,67 @@ export function FinancialLedger({ entries, onEdit, onDelete }: FinancialLedgerPr
 
   const netBalance = totalInflow - totalOutflow;
 
+  const tileBase =
+    'flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  const tileInactive = 'bg-muted/50 hover:bg-muted';
+  const tileActive = 'bg-background ring-2 ring-primary';
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Financial Ledger ({entries.length} entries)
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button
-              variant={filter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('all')}
-            >
-              All
-            </Button>
-            <Button
-              variant={filter === 'inflow' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('inflow')}
-            >
-              <ArrowUpCircle className="h-4 w-4 mr-1 text-green-600" />
-              Inflows
-            </Button>
-            <Button
-              variant={filter === 'outflow' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter('outflow')}
-            >
-              <ArrowDownCircle className="h-4 w-4 mr-1 text-red-600" />
-              Outflows
-            </Button>
-          </div>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Receipt className="h-5 w-5" />
+          Financial Ledger ({entries.length} entries)
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Summary */}
-        <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
-          <div>
-            <div className="text-sm text-muted-foreground">Total Inflows</div>
-            <div className="text-xl font-bold text-green-600">{formatCurrency(totalInflow)}</div>
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Total Outflows</div>
-            <div className="text-xl font-bold text-red-600">{formatCurrency(totalOutflow)}</div>
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Net Balance</div>
+        {/* Summary tiles double as filters: click Inflows/Outflows to filter; Net resets. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            aria-pressed={filter === 'all'}
+            className={cn(tileBase, filter === 'all' ? tileActive : tileInactive)}
+          >
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Scale className="h-4 w-4" />
+              Net Balance
+            </div>
             <div className={`text-xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(netBalance)}
             </div>
-          </div>
+            <div className="text-xs text-muted-foreground">Click to show all entries</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter((f) => (f === 'inflow' ? 'all' : 'inflow'))}
+            aria-pressed={filter === 'inflow'}
+            className={cn(tileBase, filter === 'inflow' ? tileActive : tileInactive)}
+          >
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <ArrowUpCircle className="h-4 w-4 text-green-600" />
+              Total Inflows
+            </div>
+            <div className="text-xl font-bold text-green-600">{formatCurrency(totalInflow)}</div>
+            <div className="text-xs text-muted-foreground">
+              {filter === 'inflow' ? 'Filtering — click to clear' : 'Click to filter'}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter((f) => (f === 'outflow' ? 'all' : 'outflow'))}
+            aria-pressed={filter === 'outflow'}
+            className={cn(tileBase, filter === 'outflow' ? tileActive : tileInactive)}
+          >
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <ArrowDownCircle className="h-4 w-4 text-red-600" />
+              Total Outflows
+            </div>
+            <div className="text-xl font-bold text-red-600">{formatCurrency(totalOutflow)}</div>
+            <div className="text-xs text-muted-foreground">
+              {filter === 'outflow' ? 'Filtering — click to clear' : 'Click to filter'}
+            </div>
+          </button>
         </div>
 
         {/* Ledger Table */}
