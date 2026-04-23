@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +14,7 @@ import {
   Receipt,
   Building2,
   BarChart3,
+  ChevronDown,
 } from 'lucide-react';
 import type { PortfolioOverviewData } from '@/lib/airtable';
 
@@ -37,6 +39,7 @@ const typeIcons: Record<string, typeof Receipt> = {
 };
 
 export function PortfolioOverview({ data }: PortfolioOverviewProps) {
+  const [recentOpen, setRecentOpen] = useState(false);
   return (
     <div className="space-y-6">
       {/* Section Header */}
@@ -152,53 +155,68 @@ export function PortfolioOverview({ data }: PortfolioOverviewProps) {
       {/* Recent Activity */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Recently Updated
-          </CardTitle>
+          <button
+            type="button"
+            onClick={() => setRecentOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={recentOpen}
+          >
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Recently Updated
+              <span className="text-xs font-normal text-muted-foreground">
+                ({data.recentActivity.length})
+              </span>
+            </CardTitle>
+            <ChevronDown
+              className={`h-5 w-5 text-muted-foreground transition-transform ${recentOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
         </CardHeader>
-        <CardContent>
-          {data.recentActivity.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No recent activity
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Claim</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.recentActivity.map((item) => {
-                  const Icon = typeIcons[item.type] || FileText;
-                  return (
-                    <TableRow key={`${item.type}-${item.id}`}>
-                      <TableCell className="text-sm">
-                        {item.date ? formatDate(item.date) : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={typeBadgeColors[item.type] || 'secondary'} className="gap-1">
-                          <Icon className="h-3 w-3" />
-                          {item.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{item.claimId}</TableCell>
-                      <TableCell className="max-w-[250px] truncate">{item.name}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(item.amount)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+        {recentOpen && (
+          <CardContent>
+            {data.recentActivity.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No recent activity
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Claim</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentActivity.map((item) => {
+                    const Icon = typeIcons[item.type] || FileText;
+                    return (
+                      <TableRow key={`${item.type}-${item.id}`}>
+                        <TableCell className="text-sm">
+                          {item.date ? formatDate(item.date) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={typeBadgeColors[item.type] || 'secondary'} className="gap-1">
+                            <Icon className="h-3 w-3" />
+                            {item.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{item.claimId}</TableCell>
+                        <TableCell className="max-w-[250px] truncate">{item.name}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(item.amount)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        )}
       </Card>
     </div>
   );

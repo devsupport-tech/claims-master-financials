@@ -14,6 +14,7 @@ import {
   InsuranceSubmissionTracker,
   FinancialReportTab,
   SidebarSearch,
+  GeneralInfoCard,
 } from '@/components/financial';
 import {
   getClaimFinancialSummary,
@@ -574,26 +575,35 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
 
                 {/* Claim Header */}
                 {selectedClaim && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
-                      <p className="text-muted-foreground">
-                        {selectedClaim['Last Name']}{selectedClaim['First Name'] ? `, ${selectedClaim['First Name']}` : ''} | {selectedClaim.Address}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
+                  <div>
+                    <h2 className="text-2xl font-bold">{selectedClaim['Claim ID']}</h2>
+                    <p className="text-muted-foreground">
+                      {selectedClaim['Last Name']}{selectedClaim['First Name'] ? `, ${selectedClaim['First Name']}` : ''} | {selectedClaim.Address}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-semibold">
+                        {selectedClaim['Last Name'] || 'N/A'}: {selectedClaim['Claim ID']}
+                      </span>
                       {selectedClaim.Stage && (
-                        <Badge variant="secondary">{selectedClaim.Stage}</Badge>
+                        <>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge variant="secondary">{selectedClaim.Stage}</Badge>
+                        </>
                       )}
-                      <Badge variant="outline" className="text-base px-3 py-1">
-                        {selectedClaim.Carrier}
-                      </Badge>
+                      {selectedClaim.Carrier && (
+                        <>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">Insurance:</span>
+                          <Badge variant="outline">{selectedClaim.Carrier}</Badge>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* Financial Summary */}
-                {summary && <FinancialSummaryCard summary={summary} />}
+                {/* Top summary — Total RCV + Total Received */}
+                {summary && <FinancialSummaryCard summary={summary} variant="top" />}
 
                 {/* Per-service editor — the canonical place to edit Approved
                     Estimate Amount, supplement, and add payments. Lives
@@ -621,6 +631,12 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                     }
                   />
                 )}
+
+                {/* General Info — Total Claim Value, Payments Received, Pending */}
+                {summary && <GeneralInfoCard summary={summary} />}
+
+                {/* Remaining summary cards — Outstanding, Profit, Payment Sources, Job Costing */}
+                {summary && <FinancialSummaryCard summary={summary} variant="rest" />}
 
                 {/* Supporting tabs — ledger entries, adjuster reports, mortgage
                     releases, raw job costing trades, and the submissions

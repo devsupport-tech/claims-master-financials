@@ -8,3 +8,4 @@ export { ClaimsTable } from './ClaimsTable';
 export { InsuranceSubmissionTracker } from './InsuranceSubmissionTracker';
 export { FinancialReportTab } from './FinancialReportTab';
 export { SidebarSearch } from './SidebarSearch';
+export { GeneralInfoCard } from './GeneralInfoCard';
