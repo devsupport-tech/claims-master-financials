@@ -20,6 +20,7 @@ export interface Claim {
 export interface ClaimMaster {
   id: string;
   'Claim ID': string;
+  'Carrier Claim #'?: string;
   'Last Name': string;
   'First Name': string;
   Address: string;

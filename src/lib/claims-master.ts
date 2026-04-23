@@ -12,6 +12,7 @@ export async function getAllClaimsMaster(): Promise<ClaimMaster[]> {
   return records.map(record => ({
     id: record.id,
     'Claim ID': (record.fields['Claim ID'] as string) || '',
+    'Carrier Claim #': (record.fields['Carrier Claim #'] as string) || '',
     'Last Name': (record.fields['Last Name'] as string) || '',
     'First Name': (record.fields['First Name'] as string) || '',
     Address: (record.fields['Address'] as string) || '',
