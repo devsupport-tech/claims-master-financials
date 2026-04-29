@@ -671,7 +671,11 @@ export async function getPortfolioOverview(
   filteredCosts.forEach((j: any) => {
     const submitted = Number(j['Submitted Estimate Amount']) || 0;
     if (submitted <= 0) return; // need a submitted figure to compare
-    const approved = Number(j['Approved Estimate Amount']) || 0;
+    // Approved = initial Approved Estimate + Supplement Approved (when on),
+    // matching the "Final Approved Amount" the user enters per service.
+    const approved =
+      (Number(j['Approved Estimate Amount']) || 0) +
+      (j['Has Supplement'] ? Number(j['Supplement Approved Amount']) || 0 : 0);
 
     const finClaimId = Array.isArray(j.Claim) && j.Claim.length > 0 ? j.Claim[0] : '';
     const carrier = finClaimRecordToCarrier[finClaimId] || 'Unknown';
