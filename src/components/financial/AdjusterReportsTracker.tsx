@@ -59,6 +59,7 @@ export function AdjusterReportsTracker({ reports, onEdit, onDelete }: AdjusterRe
             <TableHeader>
               <TableRow>
                 <TableHead>Version</TableHead>
+                <TableHead>Report Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Adjuster</TableHead>
@@ -75,6 +76,9 @@ export function AdjusterReportsTracker({ reports, onEdit, onDelete }: AdjusterRe
                 return (
                   <TableRow key={report.id}>
                     <TableCell className="font-medium">v{report.Version}</TableCell>
+                    <TableCell className="max-w-[220px] truncate font-medium" title={report['Report Name']}>
+                      {report['Report Name'] || '—'}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={reportTypeColors[report['Report Type']] || 'default'}>
                         {report['Report Type']}

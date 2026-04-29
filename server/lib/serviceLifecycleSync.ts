@@ -457,7 +457,10 @@ export interface ApproveEstimateInput {
 }
 
 export interface ApproveEstimateResult {
-  project: ProjectRow;
+  /** null when the Module was never run through createService (no Project
+   *  row exists in Restoration Ops yet). The save still completes — only
+   *  the P stamp is skipped. */
+  project: ProjectRow | null;
   jobCosting: JobCostingRow;
 }
 
@@ -534,14 +537,21 @@ export async function approveEstimate(
   const moduleType = (m.fields["Module Type"] as string) ?? "Service";
   const claimsMasterRecord = m.fields.Claim?.[0];
 
-  // 1. Stamp P
+  // 1. Stamp P (best effort — Modules created outside the lifecycle flow
+  // never had a Project row created in Restoration Ops; we still want to
+  // save the Approved/Submitted figures on J for those.)
   let p = await findProjectByModule(moduleRecordId);
-  if (!p) throw new Error(`Project for module ${moduleRecordId} not found — run createService first`);
   const today = (input.approvedDateISO ?? new Date().toISOString()).slice(0, 10);
-  p = (await updateRow("REST_OPS", TABLE.projects, p.id, {
-    "Estimate Status": "Approved",
-    "Estimate Approved Date": today,
-  })) as ProjectRow;
+  if (p) {
+    p = (await updateRow("REST_OPS", TABLE.projects, p.id, {
+      "Estimate Status": "Approved",
+      "Estimate Approved Date": today,
+    })) as ProjectRow;
+  } else {
+    console.warn(
+      `[approveEstimate] No Restoration Ops Project for module ${moduleRecordId} — skipping P update.`,
+    );
+  }
 
   // 2. Bridge: Job Costing.Claim links to a row in the FINANCIALS Claims
   // table, not Claims Master. Resolve (or create) the matching Financials
@@ -583,13 +593,10 @@ export async function approveEstimate(
 
   // 4. Backfill M with the Job Costing pointer + recomposed Service Status.
   // (The dollar amount lives only on J — VEC reads it via the sidecar proxy.)
+  const opStatus = (p?.fields["Operation Status"] as OperationStatus) ?? "Not Started";
   await updateRow("CLAIMS_MASTER", TABLE.modules, moduleRecordId, {
     "Job Costing Record ID": jobCosting.id,
-    "Service Status": composeServiceStatus(
-      (p.fields["Operation Status"] as OperationStatus) ?? "Not Started",
-      "Approved",
-      "No Payment",
-    ),
+    "Service Status": composeServiceStatus(opStatus, "Approved", "No Payment"),
   });
 
   return { project: p, jobCosting };

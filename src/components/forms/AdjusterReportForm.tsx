@@ -98,7 +98,29 @@ export function AdjusterReportForm({ open, onOpenChange, claimRecordId, onSucces
       }
       if (!payload['Scope Changes']) delete payload['Scope Changes']
       if (!payload.Notes) delete payload.Notes
-      if (!payload['Line Items Count']) delete payload['Line Items Count']
+
+      // Coerce-or-strip optional numerics. Airtable currency/number fields
+      // reject empty strings, so when the user leaves them blank we drop
+      // them from the payload entirely.
+      const numericKeys = [
+        'Depreciation',
+        'O&P Amount',
+        'O&P Percent',
+        'Deductible',
+        'Line Items Count',
+      ]
+      for (const k of numericKeys) {
+        const v = payload[k]
+        if (v === '' || v === null || v === undefined) {
+          delete payload[k]
+        } else {
+          payload[k] = Number(v)
+        }
+      }
+      // Required currency fields — coerce to Number; validate() already
+      // gates RCV/ACV emptiness above.
+      payload['RCV Amount'] = Number(payload['RCV Amount']) || 0
+      payload['ACV Amount'] = Number(payload['ACV Amount']) || 0
 
       if (isEditing) {
         await updateAdjusterReport(editRecord!.id, payload)
