@@ -24,6 +24,20 @@ function CompTable({ rows, groupLabel }: { rows: ComparativeRow[]; groupLabel: s
       </div>
     );
   }
+
+  // Roll the visible rows into a single Total. Variance / Accuracy % are
+  // computed from the totals (not averaged across rows) so they reflect the
+  // weighted aggregate.
+  const totalSubmitted = rows.reduce((sum, r) => sum + r.submittedEstimate, 0);
+  const totalApproved = rows.reduce((sum, r) => sum + r.approvedEstimate, 0);
+  const totalVariance = totalSubmitted - totalApproved;
+  const totalVariancePct = totalSubmitted > 0 ? (totalVariance / totalSubmitted) * 100 : 0;
+  const totalAccuracyPct = totalSubmitted > 0
+    ? Math.min(100, Math.max(0, (totalApproved / totalSubmitted) * 100))
+    : 0;
+  const totalServices = rows.reduce((sum, r) => sum + r.rowCount, 0);
+  const totalTier = accuracyTier(totalAccuracyPct);
+
   return (
     <Table>
       <TableHeader>
@@ -64,6 +78,28 @@ function CompTable({ rows, groupLabel }: { rows: ComparativeRow[]; groupLabel: s
             </TableRow>
           );
         })}
+        {/* Aggregate total — sums the visible rows. Excluded services (those
+            without a Submitted Estimate) are intentionally not in this total. */}
+        <TableRow className="border-t-2 bg-muted/40 font-semibold">
+          <TableCell>
+            <div>Total</div>
+            <div className="text-xs font-normal text-muted-foreground">
+              {totalServices} service{totalServices === 1 ? '' : 's'}
+            </div>
+          </TableCell>
+          <TableCell className="text-right">{formatCurrency(totalSubmitted)}</TableCell>
+          <TableCell className="text-right">{formatCurrency(totalApproved)}</TableCell>
+          <TableCell className={`text-right ${totalVariance > 0 ? 'text-orange-600' : 'text-emerald-700'}`}>
+            {formatCurrency(totalVariance)}
+          </TableCell>
+          <TableCell className="text-right">{totalVariancePct.toFixed(1)}%</TableCell>
+          <TableCell className="text-right">
+            <Badge variant={totalTier.variant} className="gap-1">
+              {totalAccuracyPct.toFixed(1)}%
+            </Badge>
+            <div className="mt-0.5 text-[10px] font-normal text-muted-foreground">{totalTier.label}</div>
+          </TableCell>
+        </TableRow>
       </TableBody>
     </Table>
   );
