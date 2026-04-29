@@ -12,7 +12,6 @@ import {
   ClaimsTable,
   FinancialReportTab,
   SidebarSearch,
-  GeneralInfoCard,
   ServiceLifecycleCard,
   ProjectExpensesTable,
 } from '@/components/financial';
@@ -735,13 +734,11 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                   </Card>
                 )}
 
-                {/* Top summary — Total RCV + Total Received */}
-                {summary && <FinancialSummaryCard summary={summary} variant="top" />}
-
-                {/* Per-service editor — the canonical place to edit Approved
-                    Estimate Amount, supplement, and add payments. Lives
-                    inline on the claim page (not behind a tab) because it's
-                    the primary action surface for this app. */}
+                {/* Financial Report — primary summary, surfaces Total Approved /
+                    Total Payments Received / Pending Payments at the top and
+                    expands into per-service rows below. Replaces the previous
+                    Total RCV/Total Received pair and the GeneralInfoCard, both
+                    of which duplicated these figures. */}
                 {selectedClaim && (
                   <FinancialReportTab
                     claimsMasterRecordId={selectedClaim.id}
@@ -751,10 +748,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                   />
                 )}
 
-                {/* General Info — Total Claim Value, Payments Received, Pending */}
-                {summary && <GeneralInfoCard summary={summary} />}
-
-                {/* Remaining summary cards — Outstanding, Profit, Payment Sources, Job Costing */}
+                {/* Single row: Outstanding · Gross Profit · Payment Sources · Job Costing. */}
                 {summary && <FinancialSummaryCard summary={summary} variant="rest" />}
 
                 {/* Supporting tabs — Ledger first, then one tab per service

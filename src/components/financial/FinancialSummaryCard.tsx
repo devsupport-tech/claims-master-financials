@@ -85,7 +85,7 @@ export function FinancialSummaryCard({ summary, variant = 'full' }: FinancialSum
   );
 
   const paymentSourcesCard = (
-    <Card key="sources" className="md:col-span-2">
+    <Card key="sources">
       <CardHeader>
         <CardTitle className="text-base">Payment Sources</CardTitle>
       </CardHeader>
@@ -118,7 +118,7 @@ export function FinancialSummaryCard({ summary, variant = 'full' }: FinancialSum
   );
 
   const jobCostingCard = (
-    <Card key="costing" className="md:col-span-2">
+    <Card key="costing">
       <CardHeader>
         <CardTitle className="text-base">Job Costing</CardTitle>
       </CardHeader>

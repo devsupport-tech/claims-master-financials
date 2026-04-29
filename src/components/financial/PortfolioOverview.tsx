@@ -16,6 +16,7 @@ import {
   BarChart3,
   ChevronDown,
 } from 'lucide-react';
+import { ComparativesCard } from './ComparativesCard';
 import type { PortfolioOverviewData } from '@/lib/airtable';
 
 interface PortfolioOverviewProps {
@@ -151,6 +152,9 @@ export function PortfolioOverview({ data }: PortfolioOverviewProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Comparatives — submitted vs approved estimating performance, by carrier and by trade category. */}
+      <ComparativesCard data={data.comparatives} />
 
       {/* Recent Activity */}
       <Card>

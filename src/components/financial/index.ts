@@ -11,3 +11,4 @@ export { SidebarSearch } from './SidebarSearch';
 export { GeneralInfoCard } from './GeneralInfoCard';
 export { ServiceLifecycleCard } from './ServiceLifecycleCard';
 export { ProjectExpensesTable } from './ProjectExpensesTable';
+export { ComparativesCard } from './ComparativesCard';

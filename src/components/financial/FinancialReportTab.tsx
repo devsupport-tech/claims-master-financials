@@ -259,14 +259,14 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViews
             <p className="text-2xl font-bold">{formatCurrency(totals.approved)}</p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Paid</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Payments Received</p>
             <p className="text-2xl font-bold text-emerald-700">
               {formatCurrency(totals.paid)}
             </p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
-            <p className="text-2xl font-bold">{formatCurrency(totals.remaining)}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending Payments</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totals.remaining)}</p>
           </div>
         </CardContent>
       </Card>

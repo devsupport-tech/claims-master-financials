@@ -211,6 +211,31 @@ export interface ServiceLifecycleView {
   payments: LedgerEntry[];
 }
 
+/**
+ * One row in the Comparatives analytics — aggregates one Carrier or one
+ * Trade Category across all Job Costing rows that have a Submitted Estimate
+ * Amount on file.
+ */
+export interface ComparativeRow {
+  /** Group label — carrier name or trade category. */
+  key: string;
+  submittedEstimate: number;
+  approvedEstimate: number;
+  /** submitted − approved (positive = we submitted higher than carrier approved). */
+  variance: number;
+  /** (submitted − approved) / submitted × 100. */
+  variancePercent: number;
+  /** approved / submitted × 100, clamped to [0, 100] for display. */
+  accuracyPercent: number;
+  /** How many Job Costing rows contributed to this group. */
+  rowCount: number;
+}
+
+export interface ComparativesData {
+  byCarrier: ComparativeRow[];
+  byTradeCategory: ComparativeRow[];
+}
+
 export type ProjectExpenseCategory =
   | 'Third party contractors'
   | 'Materials'

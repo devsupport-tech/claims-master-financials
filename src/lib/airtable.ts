@@ -1,4 +1,5 @@
 import Airtable from 'airtable';
+import type { ComparativeRow, ComparativesData } from '@/types';
 
 /**
  * Routing through the Node sidecar proxy.
@@ -440,6 +441,9 @@ export interface PortfolioOverviewData {
 
   // Recent activity
   recentActivity: RecentActivity[];
+
+  // Estimating-performance analytics — submitted vs approved per group
+  comparatives: ComparativesData;
 }
 
 export async function getPortfolioOverview(
@@ -634,6 +638,68 @@ export async function getPortfolioOverview(
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
+  // ── Comparatives — submitted vs approved estimating accuracy ──
+  // Carrier per Job Costing row: financial Claim → Claim ID → Claims Master row.
+  // Falls back to the Financials Claim's own Carrier mirror when the Claims
+  // Master lookup misses.
+  const claimIdToCarrier: Record<string, string> = {};
+  claims.forEach((c: any) => {
+    if (c['Claim ID']) claimIdToCarrier[c['Claim ID']] = c.Carrier || '';
+  });
+  const finClaimRecordToCarrier: Record<string, string> = {};
+  financialClaims.forEach((fc: any) => {
+    const claimId = claimIdMap[fc.id] || '';
+    finClaimRecordToCarrier[fc.id] = claimIdToCarrier[claimId] || fc.Carrier || '';
+  });
+
+  type Bucket = { submitted: number; approved: number; count: number };
+  const carrierBuckets = new Map<string, Bucket>();
+  const tradeBuckets = new Map<string, Bucket>();
+  filteredCosts.forEach((j: any) => {
+    const submitted = Number(j['Submitted Estimate Amount']) || 0;
+    if (submitted <= 0) return; // need a submitted figure to compare
+    const approved = Number(j['Approved Estimate Amount']) || 0;
+
+    const finClaimId = Array.isArray(j.Claim) && j.Claim.length > 0 ? j.Claim[0] : '';
+    const carrier = finClaimRecordToCarrier[finClaimId] || 'Unknown';
+    const carrierBucket = carrierBuckets.get(carrier) || { submitted: 0, approved: 0, count: 0 };
+    carrierBucket.submitted += submitted;
+    carrierBucket.approved += approved;
+    carrierBucket.count += 1;
+    carrierBuckets.set(carrier, carrierBucket);
+
+    const trade = (j['Trade Category'] || 'Uncategorized').toString();
+    const tradeBucket = tradeBuckets.get(trade) || { submitted: 0, approved: 0, count: 0 };
+    tradeBucket.submitted += submitted;
+    tradeBucket.approved += approved;
+    tradeBucket.count += 1;
+    tradeBuckets.set(trade, tradeBucket);
+  });
+
+  function bucketsToRows(buckets: Map<string, Bucket>): ComparativeRow[] {
+    return Array.from(buckets.entries())
+      .map(([key, b]) => {
+        const variance = b.submitted - b.approved;
+        const variancePercent = b.submitted > 0 ? (variance / b.submitted) * 100 : 0;
+        const accuracyPercent = b.submitted > 0 ? Math.min(100, Math.max(0, (b.approved / b.submitted) * 100)) : 0;
+        return {
+          key,
+          submittedEstimate: b.submitted,
+          approvedEstimate: b.approved,
+          variance,
+          variancePercent,
+          accuracyPercent,
+          rowCount: b.count,
+        } satisfies ComparativeRow;
+      })
+      .sort((a, b) => b.submittedEstimate - a.submittedEstimate);
+  }
+
+  const comparatives: ComparativesData = {
+    byCarrier: bucketsToRows(carrierBuckets),
+    byTradeCategory: bucketsToRows(tradeBuckets),
+  };
+
   return {
     totalClaims: claims.length,
     claimsByStatus,
@@ -648,5 +714,6 @@ export async function getPortfolioOverview(
     totalVariance,
     variancePercent: totalBudget > 0 ? (totalVariance / totalBudget) * 100 : 0,
     recentActivity: activity.slice(0, 10),
+    comparatives,
   };
 }
