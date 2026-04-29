@@ -44,7 +44,6 @@ import {
   Hammer,
   ChevronLeft,
   ChevronRight,
-  LogOut,
   Sun,
   Moon,
   MoreHorizontal,
@@ -67,12 +66,11 @@ const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 type View = 'overview' | 'claims' | 'claim-detail';
 
 interface DashboardProps {
-  onLogout: () => void;
   isDark: boolean;
   onThemeToggle: () => void;
 }
 
-export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
+export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const titleText = `Financials${BRANDING_LABEL ? ` ${BRANDING_LABEL}` : ''}`;
@@ -588,18 +586,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
-
-          <Button
-            variant="ghost"
-            className={cn(
-              'w-full text-rose-300 hover:bg-rose-500/10 hover:text-rose-200',
-              collapsed ? 'justify-center px-0' : 'justify-start px-4'
-            )}
-            onClick={onLogout}
-          >
-            <LogOut className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
-            {!collapsed && <span>Logout</span>}
-          </Button>
         </div>
       </aside>
 
