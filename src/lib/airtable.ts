@@ -451,12 +451,14 @@ export async function getPortfolioOverview(
   paymentsLogData?: any[],
 ): Promise<PortfolioOverviewData> {
   // Financials base: needed for transaction details (ledger, costs) and claim ID resolution
-  const [financialClaims, ledger, reports, releases, costs] = await Promise.all([
+  const [financialClaims, ledger, reports, releases, costs, expenses, costPayments] = await Promise.all([
     getAllClaims(),
     getFinancialLedger(),
     getAdjusterReports(),
     getMortgageReleases(),
     getJobCosting(),
+    getProjectExpenses(),
+    getCostPayments(),
   ]);
 
   // ── Claims Master is the source of truth ──
@@ -492,6 +494,14 @@ export async function getPortfolioOverview(
   const filteredReports = reports.filter(belongsToClaimsMaster);
   const filteredReleases = releases.filter(belongsToClaimsMaster);
   const filteredCosts = costs.filter(belongsToClaimsMaster);
+  const filteredExpenses = expenses.filter(belongsToClaimsMaster);
+  // Cost Payments link to Project Expenses, not Claims, so scope by traversal.
+  const filteredExpenseIds = new Set(filteredExpenses.map((e: any) => e.id));
+  const filteredCostPayments = costPayments.filter(
+    (p: any) =>
+      Array.isArray(p['Project Expense']) &&
+      p['Project Expense'].some((id: string) => filteredExpenseIds.has(id)),
+  );
 
   // Claim counts & status from Claims Master
   const claimsByStatus: Record<string, number> = {};
@@ -508,48 +518,51 @@ export async function getPortfolioOverview(
   const masterIdToClaimId: Record<string, string> = {};
   claims.forEach((c: any) => { masterIdToClaimId[c.id] = c['Claim ID'] || ''; });
 
-  // Paid rows from Claims Master → Payments Log also count as received.
-  const paidPaymentsTotal = (paymentsLogData || []).reduce((sum: number, p: any) => {
-    const linkedMasterId = Array.isArray(p.Claim) && p.Claim.length > 0 ? p.Claim[0] : '';
-    const claimId = masterIdToClaimId[linkedMasterId];
-    if (!claimId || !validClaimIds.has(claimId)) return sum;
-    const status = (p['Payment Status'] || p.Status || '').toLowerCase();
-    if (status !== 'paid') return sum;
-    return sum + (p.Amount || 0);
-  }, 0);
-
-  // Total Received — ledger inflows + paid Claims Master payments.
-  const ledgerReceived = filteredLedger
+  // Total Received — ledger inflows only. The Claims Master Payments Log was
+  // previously added to this number, but if the same payment was entered in
+  // both surfaces it inflated the total. Treating the Ledger as the single
+  // source of truth eliminates the double-count.
+  const totalReceived = filteredLedger
     .filter((e: any) =>
       ['Insurance Payment', 'Homeowner Payment', 'Mortgage Release'].includes(e['Entry Type'])
       && e.Direction === 'Inflow'
     )
     .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
-  const totalReceived = ledgerReceived + paidPaymentsTotal;
 
-  // Job costing — sum BOTH legacy Xactimate Budget and the new Approved
-  // Estimate Amount so the portfolio reflects services that were approved
-  // via the lifecycle flow (where only Approved Estimate Amount is set).
-  const totalBudget = filteredCosts.reduce(
-    (sum: number, c: any) =>
-      sum + (Number(c['Approved Estimate Amount']) || Number(c['Xactimate Budget']) || 0),
+  // Total Approved (revenue we expect): Approved Estimate + Supplement (when
+  // Has Supplement is on). Falls back to legacy Xactimate Budget for rows
+  // pre-dating the lifecycle flow.
+  const totalBudget = filteredCosts.reduce((sum: number, c: any) => {
+    const base = Number(c['Approved Estimate Amount']) || Number(c['Xactimate Budget']) || 0;
+    const supplement = c['Has Supplement'] ? Number(c['Supplement Approved Amount']) || 0 : 0;
+    return sum + base + supplement;
+  }, 0);
+
+  // Actual costs incurred — sum of Project Expense Amount (the bills we owe
+  // per service). The legacy Job Costing "Actual Cost" field is rarely
+  // populated since cost tracking moved into Project Expenses.
+  const totalActual = filteredExpenses.reduce(
+    (sum: number, e: any) => sum + (Number(e.Amount) || 0),
     0,
   );
-  const totalActual = filteredCosts.reduce((sum: number, c: any) => sum + (c['Actual Cost'] || 0), 0);
   const totalVariance = totalBudget - totalActual;
 
-  // Outstanding = approved (live Job Costing) − received (live Ledger Inflows).
-  // Replaces the broken Claims-Master "Total Outstanding Payments" formula,
-  // which subtracted received from a denormalized field that never gets the
-  // new Approved Estimate Amount, so it always read negative.
+  // Outstanding = approved (incl. supplements) − received.
   const totalOutstanding = Math.max(0, totalBudget - totalReceived);
 
-  // ── Transaction-level data: only for Claims Master claims ──
-  const totalOutflows = filteredLedger
+  // ── Cash outflows: Cost Payments (per-expense payments) plus any explicit
+  // Outflow ledger entries. Cost Payments are the primary path now; Outflow
+  // ledger entries remain available for adjustments / refunds. ──
+  const ledgerOutflows = filteredLedger
     .filter((e: any) => e.Direction === 'Outflow')
-    .reduce((sum: number, e: any) => sum + (e.Amount || 0), 0);
+    .reduce((sum: number, e: any) => sum + (Number(e.Amount) || 0), 0);
+  const costPaymentsTotal = filteredCostPayments.reduce(
+    (sum: number, p: any) => sum + (Number(p.Amount) || 0),
+    0,
+  );
+  const totalOutflows = ledgerOutflows + costPaymentsTotal;
 
-  // Gross profit = received − outflows (vendor payments, etc).
+  // Gross profit = received − all real outflows.
   const grossProfit = totalReceived - totalOutflows;
 
   // ── Recently Updated: only for Claims Master claims ──

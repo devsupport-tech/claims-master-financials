@@ -64,20 +64,6 @@ export function PortfolioOverview({ data }: PortfolioOverviewProps) {
 
       {/* Totals Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Total RCV */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total RCV</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.totalRCV)}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              ACV: {formatCurrency(data.totalACV)}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Total Received */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
