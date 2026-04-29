@@ -133,7 +133,9 @@ export function CostPaymentForm({
               />
               {errors.Amount && <p className="text-xs text-red-500">{errors.Amount}</p>}
               {balanceDue > 0 && (
-                <p className="text-xs text-muted-foreground">Balance due: ${balanceDue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">
+                  Balance due: ${balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
               )}
             </div>
             <div className="space-y-2">

@@ -6,12 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   FinancialSummaryCard,
   AdjusterReportsTracker,
-  MortgageReleaseTracker,
   FinancialLedger,
   JobCostingTable,
   PortfolioOverview,
   ClaimsTable,
-  InsuranceSubmissionTracker,
   FinancialReportTab,
   SidebarSearch,
   GeneralInfoCard,
@@ -22,11 +20,9 @@ import {
   getClaimFinancialSummary,
   getFinancialLedger,
   getAdjusterReports,
-  getMortgageReleases,
   getJobCosting,
   deleteLedgerEntry,
   deleteAdjusterReport,
-  deleteMortgageRelease,
   deleteJobCost,
   getPortfolioOverview,
   getProjectExpenses,
@@ -40,7 +36,6 @@ import { getStageColor } from '@/lib/claim-badges';
 import {
   DollarSign,
   FileText,
-  Building2,
   Receipt,
   RefreshCw,
   Plus,
@@ -53,20 +48,18 @@ import {
   LogOut,
   Sun,
   Moon,
-  ShieldCheck,
   MoreHorizontal,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
   AdjusterReportForm,
-  MortgageReleaseForm,
   JobCostForm,
   ProjectExpenseForm,
   CostPaymentForm,
 } from '@/components/forms';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, MortgageRelease, JobCost, ServiceLifecycleView, ProjectExpense, CostPayment } from '@/types';
+import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, JobCost, ServiceLifecycleView, ProjectExpense, CostPayment } from '@/types';
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
@@ -106,7 +99,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   // Form dialog states
   const [showLedgerForm, setShowLedgerForm] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
-  const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [showCostForm, setShowCostForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showCostPaymentForm, setShowCostPaymentForm] = useState(false);
@@ -114,7 +106,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   // Edit record states
   const [editingLedger, setEditingLedger] = useState<any>(null);
   const [editingReport, setEditingReport] = useState<any>(null);
-  const [editingRelease, setEditingRelease] = useState<any>(null);
   const [editingCost, setEditingCost] = useState<any>(null);
   const [editingExpense, setEditingExpense] = useState<ProjectExpense | null>(null);
   // Which service (moduleRecordId) the Add/Edit Expense form is opened against.
@@ -134,7 +125,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'ledger' | 'report' | 'release' | 'cost' | 'expense' | 'cost-payment';
+    type: 'ledger' | 'report' | 'cost' | 'expense' | 'cost-payment';
     record: any;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -147,13 +138,15 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [reports, setReports] = useState<AdjusterReport[]>([]);
-  const [releases, setReleases] = useState<MortgageRelease[]>([]);
   const [costs, setCosts] = useState<JobCost[]>([]);
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [costPayments, setCostPayments] = useState<CostPayment[]>([]);
   // Lifecycle views are produced by FinancialReportTab from Modules+JobCosting+Ledger;
   // bubbled up so the supporting tabs below can render one tab per service.
   const [lifecycleViews, setLifecycleViews] = useState<ServiceLifecycleView[]>([]);
+  // Bumping this counter forces FinancialReportTab to re-fetch its data,
+  // so service-tab Comparatives values refresh in place after a save.
+  const [lifecycleRefreshSignal, setLifecycleRefreshSignal] = useState(0);
 
   // Load claims + overview on mount, then poll every 30s to keep data fresh.
   // Polling pauses while viewing a claim detail or while any create/edit dialog is open,
@@ -163,14 +156,14 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     const POLL_MS = 30_000;
     const id = setInterval(() => {
       if (view === 'claim-detail') return;
-      if (showLedgerForm || showReportForm || showReleaseForm || showCostForm || showExpenseForm || showCostPaymentForm) return;
-      if (editingLedger || editingReport || editingRelease || editingCost || editingExpense) return;
+      if (showLedgerForm || showReportForm || showCostForm || showExpenseForm || showCostPaymentForm) return;
+      if (editingLedger || editingReport || editingCost || editingExpense) return;
       if (deleteTarget) return;
       refreshAll(true);
     }, POLL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, showLedgerForm, showReportForm, showReleaseForm, showCostForm, showExpenseForm, showCostPaymentForm, editingLedger, editingReport, editingRelease, editingCost, editingExpense, deleteTarget]);
+  }, [view, showLedgerForm, showReportForm, showCostForm, showExpenseForm, showCostPaymentForm, editingLedger, editingReport, editingCost, editingExpense, deleteTarget]);
 
   async function refreshAll(silent = false) {
     if (!silent) {
@@ -260,12 +253,11 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   async function loadClaimDetails(claimRecordId: string) {
     setIsLoadingDetails(true);
     try {
-      const [summaryData, ledgerData, reportsData, releasesData, costsData, expensesData] =
+      const [summaryData, ledgerData, reportsData, costsData, expensesData] =
         await Promise.all([
           getClaimFinancialSummary(claimRecordId),
           getFinancialLedger(claimRecordId),
           getAdjusterReports(claimRecordId),
-          getMortgageReleases(claimRecordId),
           getJobCosting(claimRecordId),
           getProjectExpenses(claimRecordId),
         ]);
@@ -273,7 +265,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
       setSummary(summaryData as FinancialSummary);
       setLedger(ledgerData as LedgerEntry[]);
       setReports(reportsData as AdjusterReport[]);
-      setReleases(releasesData as MortgageRelease[]);
       setCosts(costsData as JobCost[]);
       setExpenses(expensesData as ProjectExpense[]);
 
@@ -333,11 +324,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     setShowReportForm(true);
   }
 
-  function handleEditRelease(record: any) {
-    setEditingRelease(record);
-    setShowReleaseForm(true);
-  }
-
   function handleEditCost(record: any) {
     setEditingCost(record);
     setShowCostForm(true);
@@ -350,10 +336,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
 
   function handleDeleteReport(record: any) {
     setDeleteTarget({ type: 'report', record });
-  }
-
-  function handleDeleteRelease(record: any) {
-    setDeleteTarget({ type: 'release', record });
   }
 
   function handleDeleteCost(record: any) {
@@ -396,10 +378,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
           await deleteAdjusterReport(deleteTarget.record.id);
           await handleDetailCreated();
           break;
-        case 'release':
-          await deleteMortgageRelease(deleteTarget.record.id);
-          await handleDetailCreated();
-          break;
         case 'cost':
           await deleteJobCost(deleteTarget.record.id);
           await handleDetailCreated();
@@ -433,7 +411,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
     const typeLabel = {
       ledger: 'ledger entry',
       report: 'adjuster report',
-      release: 'mortgage release',
       cost: 'job cost',
       expense: 'project expense',
       'cost-payment': 'cost payment',
@@ -453,11 +430,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
   function handleReportFormClose(open: boolean) {
     setShowReportForm(open);
     if (!open) setEditingReport(null);
-  }
-
-  function handleReleaseFormClose(open: boolean) {
-    setShowReleaseForm(open);
-    if (!open) setEditingRelease(null);
   }
 
   function handleCostFormClose(open: boolean) {
@@ -775,6 +747,7 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                     claimsMasterRecordId={selectedClaim.id}
                     onViewsChange={setLifecycleViews}
                     onAddPayment={handleAddServicePayment}
+                    refreshSignal={lifecycleRefreshSignal}
                   />
                 )}
 
@@ -834,7 +807,17 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                     return (
                       <TabsContent key={v.moduleRecordId} value={v.moduleRecordId}>
                         <div className="space-y-4">
-                          <ServiceLifecycleCard view={v} onAddPayment={handleAddServicePayment} />
+                          <ServiceLifecycleCard
+                            view={v}
+                            onAddPayment={handleAddServicePayment}
+                            onChanged={() => {
+                              // Refresh both the service-level views and the
+                              // surrounding ledger/summary so the user sees
+                              // their save reflected without a manual reload.
+                              setLifecycleRefreshSignal((n) => n + 1);
+                              void handleDetailCreated();
+                            }}
+                          />
                           <ProjectExpensesTable
                             serviceName={v.serviceName}
                             expenses={serviceExpenses}
@@ -856,17 +839,9 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                           <FileText className="h-4 w-4" />
                           Adjuster Reports
                         </TabsTrigger>
-                        <TabsTrigger value="mortgage" className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          Mortgage
-                        </TabsTrigger>
                         <TabsTrigger value="costing" className="flex items-center gap-2">
                           <Hammer className="h-4 w-4" />
                           Job Costing
-                        </TabsTrigger>
-                        <TabsTrigger value="submissions" className="flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4" />
-                          Submissions
                         </TabsTrigger>
                       </TabsList>
 
@@ -886,22 +861,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                         </div>
                       </TabsContent>
 
-                      <TabsContent value="mortgage">
-                        <div className="space-y-4">
-                          <div className="flex justify-end">
-                            <Button size="sm" onClick={() => ensureBridgeAndOpenForm(() => { setEditingRelease(null); setShowReleaseForm(true); })}>
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add Release
-                            </Button>
-                          </div>
-                          <MortgageReleaseTracker
-                            releases={releases}
-                            onEdit={handleEditRelease}
-                            onDelete={handleDeleteRelease}
-                          />
-                        </div>
-                      </TabsContent>
-
                       <TabsContent value="costing">
                         <div className="space-y-4">
                           <div className="flex justify-end">
@@ -916,10 +875,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
                             onDelete={handleDeleteCost}
                           />
                         </div>
-                      </TabsContent>
-
-                      <TabsContent value="submissions">
-                        {selectedClaim && <InsuranceSubmissionTracker claimsMasterRecordId={selectedClaim.id} />}
                       </TabsContent>
                     </Tabs>
                   </TabsContent>
@@ -950,13 +905,6 @@ export function Dashboard({ onLogout, isDark, onThemeToggle }: DashboardProps) {
             claimRecordId={financialRecordId || ''}
             onSuccess={handleDetailCreated}
             editRecord={editingReport}
-          />
-          <MortgageReleaseForm
-            open={showReleaseForm}
-            onOpenChange={handleReleaseFormClose}
-            claimRecordId={financialRecordId || ''}
-            onSuccess={handleDetailCreated}
-            editRecord={editingRelease}
           />
           <JobCostForm
             open={showCostForm}

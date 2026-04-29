@@ -26,6 +26,7 @@ import {
 } from "./lib/bases.js";
 import {
   approveEstimate,
+  setSubmittedEstimate,
   createService,
   deleteService,
   setSupplement,
@@ -123,6 +124,9 @@ app.patch("/api/sync/services/:id", asyncRoute(async (req) => {
 }));
 app.post("/api/sync/services/:id/approve-estimate", asyncRoute(async (req) =>
   approveEstimate(req.params.id, req.body),
+));
+app.post("/api/sync/services/:id/submitted-estimate", asyncRoute(async (req) =>
+  setSubmittedEstimate(req.params.id, req.body),
 ));
 app.post("/api/sync/services/:id/supplement", asyncRoute(async (req) => {
   const result = await setSupplement(req.params.id, req.body);

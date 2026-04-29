@@ -90,6 +90,7 @@ export interface LedgerEntry {
   Date: string;
   'Check Number'?: string;
   'Payer/Payee': string;
+  Method?: 'Check' | 'Cash' | 'Wire' | 'Credit Card' | 'ACH' | 'Other';
   Category?: string;
   Description?: string;
   'Receipt/Invoice'?: any[];

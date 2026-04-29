@@ -119,7 +119,8 @@ export function FinancialLedger({ entries, onEdit, onDelete }: FinancialLedgerPr
                 <TableHead>Type</TableHead>
                 <TableHead>Payer/Payee</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Check #</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead>Reference #</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Reconciled</TableHead>
                 {(onEdit || onDelete) && <TableHead className="w-[80px]">Actions</TableHead>}
@@ -137,6 +138,13 @@ export function FinancialLedger({ entries, onEdit, onDelete }: FinancialLedgerPr
                   <TableCell className="font-medium">{entry['Payer/Payee']}</TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {entry.Description || entry.Category || '—'}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {entry.Method ? (
+                      entry.Method
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {entry['Check Number'] ? (

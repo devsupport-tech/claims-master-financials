@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrency } from '@/lib/utils';
 import { derivePaymentStatus, paymentStatusBadge } from '@/lib/payment-status';
-import { approveEstimate, setSupplement } from '@/services/lifecycle-sync';
+import { approveEstimate, setSubmittedEstimate, setSupplement } from '@/services/lifecycle-sync';
 import type { ServiceLifecycleView } from '@/types';
 
 interface Props {
@@ -65,18 +65,29 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
     hasSup && supplementIncrement > 0 && view.paidAmount >= approvedAmt + supplementIncrement;
 
   const handleSaveApproved = async () => {
-    if (!approvedAmt || approvedAmt <= 0) {
-      setError('Enter an Approved Estimate Amount greater than zero before saving.');
+    // Allow saving Submitted alone (carrier hasn't approved yet); only block
+    // when both fields are empty.
+    if ((!approvedAmt || approvedAmt <= 0) && (!submittedAmt || submittedAmt <= 0)) {
+      setError('Enter a Submitted or Approved estimate amount before saving.');
       return;
     }
     setBusy('approve');
     setError(null);
     setSuccess(null);
     try {
-      await approveEstimate(view.moduleRecordId, {
-        approvedAmount: approvedAmt,
-        submittedAmount: submittedAmt,
-      });
+      if (approvedAmt > 0) {
+        // Full lifecycle: marks Estimate Status = Approved on Restoration Ops.
+        await approveEstimate(view.moduleRecordId, {
+          approvedAmount: approvedAmt,
+          submittedAmount: submittedAmt,
+        });
+      } else {
+        // Submitted-only path: capture the carrier-bound figure without
+        // claiming approval yet.
+        await setSubmittedEstimate(view.moduleRecordId, {
+          submittedAmount: submittedAmt,
+        });
+      }
       setSuccess('Comparatives saved and synced to all bases.');
       onChanged?.();
     } catch (e) {

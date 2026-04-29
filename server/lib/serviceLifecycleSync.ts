@@ -461,6 +461,70 @@ export interface ApproveEstimateResult {
   jobCosting: JobCostingRow;
 }
 
+export interface SetSubmittedEstimateInput {
+  submittedAmount: number;
+  approvedAmount?: number;
+}
+
+export interface SetSubmittedEstimateResult {
+  jobCosting: JobCostingRow;
+}
+
+/**
+ * Save the Submitted Estimate Amount on a service's Job Costing row WITHOUT
+ * marking the estimate as Approved on the Restoration Ops Project. Used
+ * before the carrier signs off, so contractors can capture what they
+ * originally submitted even when there's no approval yet.
+ *
+ * If a J row doesn't exist for this module, one is created (with a 0
+ * Approved Estimate Amount unless the caller passes a non-zero approvedAmount).
+ */
+export async function setSubmittedEstimate(
+  moduleRecordId: string,
+  input: SetSubmittedEstimateInput,
+): Promise<SetSubmittedEstimateResult> {
+  const m = await getModule(moduleRecordId);
+  if (!m) throw new Error(`Module ${moduleRecordId} not found`);
+  const moduleType = (m.fields["Module Type"] as string) ?? "Service";
+  const claimsMasterRecord = m.fields.Claim?.[0];
+
+  const financialsClaimRecord = claimsMasterRecord
+    ? await ensureFinancialsClaim(claimsMasterRecord)
+    : undefined;
+
+  const existing = await findJobCostingByModule(moduleRecordId);
+  let jobCosting: JobCostingRow;
+  if (existing) {
+    jobCosting = (await updateRow("FINANCIALS", TABLE.jobCosting, existing.id, {
+      "Submitted Estimate Amount": input.submittedAmount,
+      ...(input.approvedAmount !== undefined
+        ? { "Approved Estimate Amount": input.approvedAmount }
+        : {}),
+      "Trade Category": moduleType,
+      "Module Record ID": moduleRecordId,
+    })) as JobCostingRow;
+  } else {
+    const today = new Date().toISOString().slice(0, 10);
+    jobCosting = (await createRow("FINANCIALS", TABLE.jobCosting, {
+      "Cost Name": `${moduleType} — ${moduleRecordId.slice(-6)}`,
+      "Trade Category": moduleType,
+      "Submitted Estimate Amount": input.submittedAmount,
+      "Approved Estimate Amount": input.approvedAmount ?? 0,
+      "Invoice Date": today,
+      "Module Record ID": moduleRecordId,
+      ...(financialsClaimRecord ? { Claim: [financialsClaimRecord] } : {}),
+    })) as JobCostingRow;
+  }
+
+  // Stash the J pointer back on the Module so VEC/Rest Ops can find it.
+  // Don't recompute Service Status — that's owned by approveEstimate.
+  await updateRow("CLAIMS_MASTER", TABLE.modules, moduleRecordId, {
+    "Job Costing Record ID": jobCosting.id,
+  });
+
+  return { jobCosting };
+}
+
 export async function approveEstimate(
   moduleRecordId: string,
   input: ApproveEstimateInput,

@@ -58,6 +58,24 @@ export async function approveEstimate(
   return syncRequest('POST', `/services/${moduleRecordId}/approve-estimate`, payload);
 }
 
+export interface SetSubmittedEstimatePayload {
+  submittedAmount: number;
+  /** Optional approved amount; will be written to J if provided. */
+  approvedAmount?: number;
+}
+
+/**
+ * Save Submitted Estimate Amount on a service WITHOUT marking the estimate
+ * as Approved on Restoration Ops. Use when the carrier hasn't approved yet
+ * but the user wants to capture what was first submitted.
+ */
+export async function setSubmittedEstimate(
+  moduleRecordId: string,
+  payload: SetSubmittedEstimatePayload,
+): Promise<unknown> {
+  return syncRequest('POST', `/services/${moduleRecordId}/submitted-estimate`, payload);
+}
+
 export interface SetSupplementPayload {
   hasSupplement: boolean;
   amount?: number;

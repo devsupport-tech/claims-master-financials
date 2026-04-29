@@ -15,6 +15,7 @@ import { AlertCircle, FileText, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getModulesForClaim, type ModuleRow } from '@/lib/claims-master';
+import { formatCurrency } from '@/lib/utils';
 import { getFinancialLedger, getJobCosting } from '@/lib/airtable';
 import type { JobCost, LedgerEntry, ServiceLifecycleView } from '@/types';
 
@@ -25,6 +26,10 @@ interface Props {
   /** Bubbles the freshly-built lifecycle views up so a parent can render
    *  per-service tabs without re-fetching. */
   onViewsChange?: (views: ServiceLifecycleView[]) => void;
+  /** Bumping this number triggers a re-fetch — used by parents that just
+   *  wrote new approved/submitted/supplement values and want the views to
+   *  refresh without the user clicking the Refresh button. */
+  refreshSignal?: number;
 }
 
 interface SupplementSnapshot {
@@ -123,7 +128,7 @@ function buildLifecycleViews(
   });
 }
 
-export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViewsChange }: Props) {
+export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViewsChange, refreshSignal }: Props) {
   const [views, setViews] = useState<ServiceLifecycleView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -213,7 +218,7 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViews
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimsMasterRecordId]);
+  }, [claimsMasterRecordId, refreshSignal]);
 
   const totals = useMemo(() => {
     const approved = views.reduce(
@@ -251,17 +256,17 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViews
         <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Approved</p>
-            <p className="text-2xl font-bold">${totals.approved.toLocaleString()}</p>
+            <p className="text-2xl font-bold">{formatCurrency(totals.approved)}</p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Paid</p>
             <p className="text-2xl font-bold text-emerald-700">
-              ${totals.paid.toLocaleString()}
+              {formatCurrency(totals.paid)}
             </p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
-            <p className="text-2xl font-bold">${totals.remaining.toLocaleString()}</p>
+            <p className="text-2xl font-bold">{formatCurrency(totals.remaining)}</p>
           </div>
         </CardContent>
       </Card>
@@ -273,7 +278,7 @@ export function FinancialReportTab({ claimsMasterRecordId, onAddPayment, onViews
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-semibold">
-                  Supplement added on {evt.serviceName} — ${evt.amount.toLocaleString()} additional.
+                  Supplement added on {evt.serviceName} — {formatCurrency(evt.amount)} additional.
                 </p>
                 <p className="text-xs">
                   Mode: {evt.mode}

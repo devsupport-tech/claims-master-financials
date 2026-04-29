@@ -31,8 +31,11 @@ interface LedgerEntryFormProps {
     Description: string
     Reconciled: boolean
     Notes: string
+    Method: string
   }>
 }
+
+const METHOD_OPTIONS = ['Check', 'Cash', 'Wire', 'Credit Card', 'ACH', 'Other'] as const
 
 const DIRECTION_MAP: Record<string, string> = {
   'Insurance Payment': 'Inflow',
@@ -50,6 +53,7 @@ const INITIAL_STATE = {
   Date: new Date().toISOString().split('T')[0],
   'Check Number': '',
   'Payer/Payee': '',
+  Method: '',
   Category: '',
   Description: '',
   Reconciled: false,
@@ -70,10 +74,12 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
         'Entry Name': editRecord['Entry Name'] || '',
         'Entry Type': editRecord['Entry Type'] || '',
         Direction: editRecord.Direction || '',
-        Amount: editRecord.Amount || '',
+        // Keep as string so the user can edit decimals without losing trailing zeros.
+        Amount: editRecord.Amount != null ? String(editRecord.Amount) : '',
         Date: editRecord.Date || new Date().toISOString().split('T')[0],
         'Check Number': editRecord['Check Number'] || '',
         'Payer/Payee': editRecord['Payer/Payee'] || '',
+        Method: editRecord.Method || '',
         Category: editRecord.Category || '',
         Description: editRecord.Description || '',
         Reconciled: editRecord.Reconciled || false,
@@ -126,11 +132,17 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const payload: Record<string, any> = { ...form }
+      // Coerce the as-typed Amount string to a Number on submit so trailing
+      // zeros (123.40) survive editing without being trimmed mid-keystroke.
+      const payload: Record<string, any> = {
+        ...form,
+        Amount: Number(form.Amount) || 0,
+      }
       if (!isEditing) {
         payload.Claim = [claimRecordId]
       }
       if (!payload['Check Number']) delete payload['Check Number']
+      if (!payload.Method) delete payload.Method
       if (!payload.Category) delete payload.Category
       if (!payload.Description) delete payload.Description
       if (!payload.Notes) delete payload.Notes
@@ -164,6 +176,13 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Date first so the user anchors the entry in time. */}
+          <div className="space-y-2">
+            <Label htmlFor="date">Date *</Label>
+            <Input id="date" type="date" className={fieldClass('Date')} value={form.Date} onChange={(e) => updateField('Date', e.target.value)} />
+            {errors['Date'] && <p className="text-xs text-red-500">{errors['Date']}</p>}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="entryName">Entry Name *</Label>
             <Input id="entryName" placeholder="e.g. Initial Insurance Payment" className={fieldClass('Entry Name')} value={form['Entry Name']} onChange={(e) => updateField('Entry Name', e.target.value)} />
@@ -198,16 +217,32 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
             </div>
           </div>
 
+          {/* Amount + Reference Number on the same row. Amount is stored as a
+              string while typing so trailing decimals (e.g. 123.40) aren't
+              trimmed mid-keystroke; we coerce on submit. */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="amount">Amount ($) *</Label>
-              <Input id="amount" type="number" step="0.01" min="0" className={fieldClass('Amount')} value={form.Amount || ''} onChange={(e) => updateField('Amount', parseFloat(e.target.value) || 0)} />
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                min="0"
+                className={fieldClass('Amount')}
+                value={form.Amount}
+                onChange={(e) => updateField('Amount', e.target.value)}
+              />
               {errors['Amount'] && <p className="text-xs text-red-500">{errors['Amount']}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Date *</Label>
-              <Input id="date" type="date" className={fieldClass('Date')} value={form.Date} onChange={(e) => updateField('Date', e.target.value)} />
-              {errors['Date'] && <p className="text-xs text-red-500">{errors['Date']}</p>}
+              <Label htmlFor="checkNumber">Deposit / Transaction / Reference #</Label>
+              <Input
+                id="checkNumber"
+                placeholder="Check #, wire ref, deposit slip, etc."
+                value={form['Check Number']}
+                onChange={(e) => updateField('Check Number', e.target.value)}
+              />
             </div>
           </div>
 
@@ -218,8 +253,15 @@ export function LedgerEntryForm({ open, onOpenChange, claimRecordId, onSuccess, 
               {errors['Payer/Payee'] && <p className="text-xs text-red-500">{errors['Payer/Payee']}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="checkNumber">Check Number</Label>
-              <Input id="checkNumber" value={form['Check Number']} onChange={(e) => updateField('Check Number', e.target.value)} />
+              <Label htmlFor="method">Mode of Payment</Label>
+              <Select value={form.Method} onValueChange={(v) => updateField('Method', v)}>
+                <SelectTrigger id="method"><SelectValue placeholder="Cash, Check, Wire, etc." /></SelectTrigger>
+                <SelectContent>
+                  {METHOD_OPTIONS.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
