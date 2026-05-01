@@ -36,6 +36,18 @@ export interface ClaimMaster {
   'O&P': number;
   Depreciation: number;
   'Adjuster Name': string;
+  'Adjuster Email'?: string;
+  'Customer Email'?: string;
+  'Customer Phone'?: string;
+  'Alternative Contact Name'?: string;
+  'Alternative Contact Relationship'?: string;
+  'Alternative Contact Phone'?: string;
+  'Alternative Contact Email'?: string;
+  'Referral Type'?: string;
+  'Referral Name'?: string;
+  'Referral Phone'?: string;
+  'Referral Email'?: string;
+  'Referral Notes'?: string;
   'Mortgage Company': string;
   'Total Payout': number;
   'Total Outstanding Payments': number;

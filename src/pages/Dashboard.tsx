@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   FinancialSummaryCard,
   AdjusterReportsTracker,
@@ -32,6 +31,8 @@ import {
 import type { PortfolioOverviewData } from '@/lib/airtable';
 import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster, getPaymentsLog } from '@/lib/claims-master';
 import { getStageColor } from '@/lib/claim-badges';
+import ClaimHeaderCard from '@/components/claim/ClaimHeaderCard';
+import ClaimInfoCard from '@/components/claim/ClaimInfoCard';
 import {
   DollarSign,
   FileText,
@@ -645,79 +646,41 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                   Back to Claims
                 </Button>
 
-                {/* Claim Header — mirrors the Claims Master VEC claim header
-                    layout so users see the same identity treatment across
-                    apps. Gradient card + glass-morphism container, bold
-                    "{Last Name} : {Carrier Claim #}" heading, name/address
-                    subline, color-mapped Status + Insurance chips, and a
-                    meta info row (Loss Type · Loss Date · Adjuster) below. */}
                 {selectedClaim && (
-                  <Card className="overflow-hidden border-border bg-gradient-to-r from-background via-muted/50 to-info/5 text-foreground shadow-lg dark:from-background dark:via-muted/30 dark:to-info/5">
-                    <CardContent className="pt-6">
-                      <div className="rounded-2xl border border-border bg-background/80 px-5 py-4 shadow-sm backdrop-blur-sm">
-                        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-                          {selectedClaim['Last Name'] || 'N/A'}  :  {selectedClaim['Carrier Claim #'] || selectedClaim['Claim ID']}
-                        </h1>
-                        {selectedClaim['Carrier Claim #'] && selectedClaim['Claim ID'] && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Claim ID: {selectedClaim['Claim ID']}
-                          </p>
-                        )}
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {selectedClaim['Last Name']}
-                          {selectedClaim['First Name'] ? `, ${selectedClaim['First Name']}` : ''}
-                          {selectedClaim.Address ? ` | ${selectedClaim.Address}` : ''}
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                          {selectedClaim.Stage && (
-                            <>
-                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status:</span>
-                              <Badge variant="outline" className={getStageColor(selectedClaim.Stage)}>
-                                {selectedClaim.Stage}
-                              </Badge>
-                            </>
-                          )}
-                          {selectedClaim.Carrier && (
-                            <>
-                              <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Insurance:</span>
-                              <Badge variant="outline">{selectedClaim.Carrier}</Badge>
-                            </>
-                          )}
-                        </div>
-                        {/* Claim metadata — matches the Claims Master VEC info
-                            grid. Inline + compact so the Financials header
-                            stays lean but users see the same identity context. */}
-                        {(selectedClaim['Loss Type'] || selectedClaim['Loss Date'] || selectedClaim['Adjuster Name'] || selectedClaim['Policy Number']) && (
-                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            {selectedClaim['Loss Type'] && (
-                              <span>
-                                <span className="font-semibold uppercase tracking-wide">Loss:</span>{' '}
-                                <span className="text-foreground">{selectedClaim['Loss Type']}</span>
-                              </span>
-                            )}
-                            {selectedClaim['Loss Date'] && (
-                              <span>
-                                <span className="font-semibold uppercase tracking-wide">Date of Loss:</span>{' '}
-                                <span className="text-foreground">{selectedClaim['Loss Date']}</span>
-                              </span>
-                            )}
-                            {selectedClaim['Policy Number'] && (
-                              <span>
-                                <span className="font-semibold uppercase tracking-wide">Policy #:</span>{' '}
-                                <span className="text-foreground">{selectedClaim['Policy Number']}</span>
-                              </span>
-                            )}
-                            {selectedClaim['Adjuster Name'] && (
-                              <span>
-                                <span className="font-semibold uppercase tracking-wide">Adjuster:</span>{' '}
-                                <span className="text-foreground">{selectedClaim['Adjuster Name']}</span>
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <>
+                    <ClaimHeaderCard
+                      claim={{
+                        'Last Name': selectedClaim['Last Name'],
+                        'Carrier Claim #': selectedClaim['Carrier Claim #'],
+                        ClaimID: selectedClaim['Claim ID'],
+                        Stage: selectedClaim.Stage,
+                      }}
+                    />
+                    <ClaimInfoCard
+                      claim={{
+                        'First Name': selectedClaim['First Name'],
+                        'Last Name': selectedClaim['Last Name'],
+                        Address: selectedClaim.Address,
+                        Carrier: selectedClaim.Carrier,
+                        'Carrier Claim #': selectedClaim['Carrier Claim #'],
+                        'Loss Type': selectedClaim['Loss Type'],
+                        'Loss Date': selectedClaim['Loss Date'],
+                        'Adjuster Name': selectedClaim['Adjuster Name'],
+                        'Adjuster Email': selectedClaim['Adjuster Email'],
+                        'Customer Email': selectedClaim['Customer Email'],
+                        'Customer Phone': selectedClaim['Customer Phone'],
+                        'Alternative Contact Name': selectedClaim['Alternative Contact Name'],
+                        'Alternative Contact Relationship': selectedClaim['Alternative Contact Relationship'],
+                        'Alternative Contact Phone': selectedClaim['Alternative Contact Phone'],
+                        'Alternative Contact Email': selectedClaim['Alternative Contact Email'],
+                        'Referral Type': selectedClaim['Referral Type'],
+                        'Referral Name': selectedClaim['Referral Name'],
+                        'Referral Phone': selectedClaim['Referral Phone'],
+                        'Referral Email': selectedClaim['Referral Email'],
+                        'Referral Notes': selectedClaim['Referral Notes'],
+                      }}
+                    />
+                  </>
                 )}
 
                 {/* Financial Report — primary summary, surfaces Total Approved /
