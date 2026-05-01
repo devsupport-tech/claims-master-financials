@@ -30,7 +30,6 @@ import {
 } from '@/lib/airtable';
 import type { PortfolioOverviewData } from '@/lib/airtable';
 import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster, getPaymentsLog } from '@/lib/claims-master';
-import { getStageColor } from '@/lib/claim-badges';
 import ClaimHeaderCard from '@/components/claim/ClaimHeaderCard';
 import ClaimInfoCard from '@/components/claim/ClaimInfoCard';
 import {
