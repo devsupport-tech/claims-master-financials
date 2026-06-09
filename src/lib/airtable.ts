@@ -902,7 +902,7 @@ export async function getClaimFinancialSummary(claimRecordId: string) {
         await supabase.from('claims').select('*').eq('id', claimRecordId).single(),
         'getClaimFinancialSummary.claim',
       );
-      return mapClaim(data as ClaimRow);
+      return mapClaim(data as unknown as ClaimRow);
     })(),
     getFinancialLedger(claimRecordId),
     getAdjusterReports(claimRecordId),
