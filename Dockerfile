@@ -7,13 +7,15 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Vite client-side env (NO PAT — only the proxy origin and harmless vars).
+# Vite client-side env (publishable values only — never secrets).
 # These get baked into the JS bundle and are publicly visible by design.
 ARG VITE_API_BASE_URL=/api
 ARG VITE_APP_PASSWORD
 ARG VITE_LINK_CLAIMS_MASTER
 ARG VITE_LINK_RESTORATION_OPS
 ARG VITE_BRANDING_LABEL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
 
 # Copy source and build the SPA into ./dist
 COPY . .
@@ -37,12 +39,13 @@ ENV PORT=80
 EXPOSE 80
 
 # Healthcheck — Coolify uses this to mark the container ready and to wire
-# up its reverse proxy. /api/bases is a cheap GET that exercises the env
-# (returns the resolved 3 base IDs) without touching Airtable.
+# up its reverse proxy. /api/health is a cheap GET that doesn't touch any
+# downstream service.
 RUN apk add --no-cache curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -fsS http://localhost:${PORT}/api/bases || exit 1
+  CMD curl -fsS http://localhost:${PORT}/api/health || exit 1
 
-# tsx runs the TS sidecar directly. Server-side env (AIRTABLE_PAT,
-# AIRTABLE_*_BASE, PROXY_SHARED_SECRET) must be supplied by the deployment.
+# tsx runs the TS sidecar directly. Server-side env (SUPABASE_URL,
+# SUPABASE_SERVICE_ROLE_KEY, optional PROXY_SHARED_SECRET) must be supplied
+# by the deployment.
 CMD ["npx", "tsx", "server/index.ts"]

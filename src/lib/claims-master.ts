@@ -1,130 +1,193 @@
-import { getClaimByClaimId, createClaim, baseFor } from './airtable';
+/**
+ * Claims-Master wrappers — Supabase edition.
+ *
+ * In the single-Supabase setup the "Claims Master" base no longer exists as
+ * a separate database — it's just the same `claims` table that this app
+ * reads/writes. So these helpers are now thin convenience wrappers around
+ * the same supabase client, returning data in the legacy "Claims Master"
+ * PascalCase shape so existing components don't have to change.
+ *
+ * `ensureFinancialClaimRecord()` is now a no-op: a claim's id IS the
+ * Supabase uuid, and there is no bridge to maintain. We keep the function
+ * (returning `claim.id`) so call sites that capture the returned id don't
+ * have to be rewritten.
+ *
+ * `syncFinancialSummaryToClaimsMaster()` is also effectively a no-op —
+ * writing summary fields back to the same table that produced them would be
+ * circular. We keep it as a function that writes a couple of denormalized
+ * roll-ups to the claim row for the table view to read.
+ */
+import { supabase } from './supabase';
 import type { ClaimMaster, FinancialSummary } from '@/types';
 
-// Routed through the sidecar proxy. The Claims Master sibling base is
-// resolved from the same /api/bases response that bootstrapped Financials.
-const claimsMasterBase = ((tableName: string) => baseFor('CLAIMS_MASTER')(tableName)) as ReturnType<typeof baseFor>;
+interface ClaimRow {
+  id: string;
+  claim_id?: string | null;
+  last_name?: string | null;
+  first_name?: string | null;
+  address?: string | null;
+  carrier?: string | null;
+  carrier_claim_number?: string | null;
+  policy_number?: string | null;
+  loss_date?: string | null;
+  loss_type?: string | null;
+  status?: string | null;
+  stage?: string | null;
+  rcv?: number | null;
+  acv?: number | null;
+  deductible?: number | null;
+  o_and_p?: number | null;
+  depreciation?: number | null;
+  adjuster_name?: string | null;
+  adjuster_email?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  alternative_contact_name?: string | null;
+  alternative_contact_relationship?: string | null;
+  alternative_contact_phone?: string | null;
+  alternative_contact_email?: string | null;
+  referral_type?: string | null;
+  referral_name?: string | null;
+  referral_phone?: string | null;
+  referral_email?: string | null;
+  referral_notes?: string | null;
+  total_payout?: number | null;
+  total_outstanding_payments?: number | null;
+  net_claim_sum?: number | null;
+  depreciation_recoverable?: number | null;
+  total_approved_budget?: number | null;
+  checklist?: unknown;
+  mortgage?: unknown;
+  fields_raw?: Record<string, unknown> | null;
+}
 
-const TABLE_NAME = 'Claims';
+function unwrap<T>(payload: { data: T | null; error: { message: string } | null }, op: string): T {
+  if (payload.error) {
+    throw new Error(`[supabase] ${op} failed: ${payload.error.message}`);
+  }
+  return (payload.data ?? ([] as unknown as T));
+}
+
+function rawObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return {};
+}
+
+function mortgageCompanyFromJson(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && 'company' in value) {
+    const v = (value as { company?: unknown }).company;
+    return typeof v === 'string' ? v : '';
+  }
+  return '';
+}
+
+function checklistFromValue(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  // Supabase stores it as jsonb — stringify for the legacy callers that
+  // expect a serialized blob.
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function mapClaimMaster(row: ClaimRow): ClaimMaster {
+  const raw = rawObject(row.fields_raw);
+  const carrierClaimNumber =
+    (typeof raw['Carrier Claim #'] === 'string' ? (raw['Carrier Claim #'] as string) : '') ||
+    row.carrier_claim_number ||
+    '';
+  return {
+    id: row.id,
+    'Claim ID': row.claim_id ?? '',
+    'Carrier Claim #': carrierClaimNumber || undefined,
+    'Last Name': row.last_name ?? '',
+    'First Name': row.first_name ?? '',
+    Address: row.address ?? '',
+    Carrier: row.carrier ?? '',
+    'Policy Number': row.policy_number ?? '',
+    'Loss Date': row.loss_date ?? '',
+    'Loss Type': row.loss_type ?? '',
+    Status: row.status ?? '',
+    Stage: row.stage ?? '',
+    RCV: row.rcv ?? 0,
+    ACV: row.acv ?? 0,
+    Deductible: row.deductible ?? 0,
+    'O&P': row.o_and_p ?? 0,
+    Depreciation: row.depreciation ?? 0,
+    'Adjuster Name': row.adjuster_name ?? '',
+    'Adjuster Email': row.adjuster_email || undefined,
+    'Customer Email': row.customer_email || undefined,
+    'Customer Phone': row.customer_phone || undefined,
+    'Alternative Contact Name': row.alternative_contact_name || undefined,
+    'Alternative Contact Relationship': row.alternative_contact_relationship || undefined,
+    'Alternative Contact Phone': row.alternative_contact_phone || undefined,
+    'Alternative Contact Email': row.alternative_contact_email || undefined,
+    'Referral Type': row.referral_type || undefined,
+    'Referral Name': row.referral_name || undefined,
+    'Referral Phone': row.referral_phone || undefined,
+    'Referral Email': row.referral_email || undefined,
+    'Referral Notes': row.referral_notes || undefined,
+    'Mortgage Company': mortgageCompanyFromJson(row.mortgage),
+    'Total Payout': row.total_payout ?? 0,
+    'Total Outstanding Payments': row.total_outstanding_payments ?? 0,
+    'Net Claim Sum': row.net_claim_sum ?? 0,
+    'Depreciation Recoverable': row.depreciation_recoverable ?? 0,
+    'Total Approved Budget': row.total_approved_budget ?? 0,
+    Checklist: checklistFromValue(row.checklist),
+  };
+}
 
 export async function getAllClaimsMaster(): Promise<ClaimMaster[]> {
-  const records = await claimsMasterBase(TABLE_NAME).select().all();
-  return records.map(record => ({
-    id: record.id,
-    'Claim ID': (record.fields['Claim ID'] as string) || '',
-    'Carrier Claim #': (record.fields['Carrier Claim #'] as string) || '',
-    'Last Name': (record.fields['Last Name'] as string) || '',
-    'First Name': (record.fields['First Name'] as string) || '',
-    Address: (record.fields['Address'] as string) || '',
-    Carrier: (record.fields['Carrier'] as string) || '',
-    'Policy Number': (record.fields['Policy Number'] as string) || '',
-    'Loss Date': (record.fields['Loss Date'] as string) || '',
-    'Loss Type': (record.fields['Loss Type'] as string) || '',
-    Status: (record.fields['Status'] as string) || '',
-    Stage: (record.fields['Stage'] as string) || '',
-    RCV: (record.fields['RCV'] as number) || 0,
-    ACV: (record.fields['ACV'] as number) || 0,
-    Deductible: (record.fields['Deductible'] as number) || 0,
-    'O&P': (record.fields['O&P'] as number) || 0,
-    Depreciation: (record.fields['Depreciation'] as number) || 0,
-    'Adjuster Name': (record.fields['Adjuster Name'] as string) || '',
-    'Adjuster Email': (record.fields['Adjuster Email'] as string) || undefined,
-    'Customer Email': (record.fields['Customer Email'] as string) || undefined,
-    'Customer Phone': (record.fields['Customer Phone'] as string) || undefined,
-    'Alternative Contact Name': (record.fields['Alternative Contact Name'] as string) || undefined,
-    'Alternative Contact Relationship': (record.fields['Alternative Contact Relationship'] as string) || undefined,
-    'Alternative Contact Phone': (record.fields['Alternative Contact Phone'] as string) || undefined,
-    'Alternative Contact Email': (record.fields['Alternative Contact Email'] as string) || undefined,
-    'Referral Type': (record.fields['Referral Type'] as string) || undefined,
-    'Referral Name': (record.fields['Referral Name'] as string) || undefined,
-    'Referral Phone': (record.fields['Referral Phone'] as string) || undefined,
-    'Referral Email': (record.fields['Referral Email'] as string) || undefined,
-    'Referral Notes': (record.fields['Referral Notes'] as string) || undefined,
-    'Mortgage Company': (record.fields['Mortgage Company'] as string) || '',
-    'Total Payout': (record.fields['Total Payout'] as number) || 0,
-    'Total Outstanding Payments': (record.fields['Total Outstanding Payments'] as number) || 0,
-    'Net Claim Sum': (record.fields['Net Claim Sum'] as number) || 0,
-    'Depreciation Recoverable': (record.fields['Depreciation Recoverable'] as number) || 0,
-    'Total Approved Budget': (record.fields['Total Approved Budget'] as number) || 0,
-    Checklist: (record.fields['Checklist'] as string) || '',
-  }));
+  const data = unwrap(await supabase.from('claims').select('*'), 'getAllClaimsMaster');
+  return (data as ClaimRow[]).map(mapClaimMaster);
 }
 
 /**
- * Bridge function: looks up or creates a corresponding record in the Financials base
- * so that financial records (ledger, reports, etc.) can link to it.
- * Returns the Financials base record ID.
+ * In the single-DB world the "financial record" IS the claim — same row, same
+ * id. Kept as a function so callers continue to compile without rewrites.
  */
 export async function ensureFinancialClaimRecord(claim: ClaimMaster): Promise<string> {
-  try {
-    const existing = await getClaimByClaimId(claim['Claim ID']);
-    if (existing) {
-      return existing.id as string;
-    }
-  } catch (lookupErr: any) {
-    console.error('Bridge lookup failed for Claim ID:', claim['Claim ID'], lookupErr?.message || lookupErr);
-    throw lookupErr;
-  }
-
-  try {
-    // Only include text/number fields that are safe across both bases.
-    // Skip select fields (Status) — the Financials base may have different options.
-    // Skip date fields if empty — Airtable rejects empty strings for date columns.
-    const bridgeData: Record<string, any> = {
-      'Claim ID': claim['Claim ID'],
-      'Last Name': claim['Last Name'],
-      'First Name': claim['First Name'],
-      Address: claim.Address,
-      Carrier: claim.Carrier,
-      'Policy Number': claim['Policy Number'],
-      RCV: claim.RCV,
-      ACV: claim.ACV,
-      Deductible: claim.Deductible,
-      'O&P': claim['O&P'],
-      Depreciation: claim.Depreciation,
-    };
-
-    if (claim['Loss Date']) {
-      bridgeData['Date of Loss'] = claim['Loss Date'];
-    }
-
-    const created = await createClaim(bridgeData);
-
-    return created.id as string;
-  } catch (createErr: any) {
-    console.error('Bridge create failed for Claim ID:', claim['Claim ID'], createErr?.message || createErr);
-    throw createErr;
-  }
+  return claim.id;
 }
 
-/**
- * Read the Checklist JSON string from a Claims Master record.
- */
 export async function getClaimChecklist(claimsMasterRecordId: string): Promise<string> {
-  const record = await claimsMasterBase(TABLE_NAME).find(claimsMasterRecordId);
-  return (record.fields['Checklist'] as string) || '';
+  const data = unwrap(
+    await supabase.from('claims').select('checklist').eq('id', claimsMasterRecordId).single(),
+    'getClaimChecklist',
+  ) as { checklist?: unknown };
+  return checklistFromValue(data.checklist);
 }
 
-/**
- * Write the Checklist JSON string to a Claims Master record.
- */
 export async function updateClaimChecklist(
   claimsMasterRecordId: string,
-  checklistJson: string
+  checklistJson: string,
 ): Promise<void> {
-  await claimsMasterBase(TABLE_NAME).update(claimsMasterRecordId, {
-    Checklist: checklistJson,
-  });
+  // Try to parse so Postgres jsonb gets a real object. Fall back to the
+  // raw string if it isn't valid JSON.
+  let payload: unknown = checklistJson;
+  try {
+    payload = JSON.parse(checklistJson);
+  } catch {
+    payload = checklistJson;
+  }
+  unwrap(
+    await supabase
+      .from('claims')
+      .update({ checklist: payload as never })
+      .eq('id', claimsMasterRecordId),
+    'updateClaimChecklist',
+  );
 }
 
 /**
- * Sync financial summary data back to the Claims Master record.
- * Updates Total Payout, Total Outstanding Payments, and RCV/ACV
- * on the Claims Master side so both bases stay in sync.
- */
-/**
- * A row from the Claims Master "Payments Log" table.
- * Used to surface externally-logged payments on the Overview "Recently Updated" feed.
+ * A row from the Payments Log table.
  */
 export interface PaymentLogRow {
   id: string;
@@ -139,25 +202,37 @@ export interface PaymentLogRow {
 }
 
 export async function getPaymentsLog(): Promise<PaymentLogRow[]> {
-  const records = await claimsMasterBase('Payments Log').select().all();
-  return records.map(r => ({
-    id: r.id,
-    Claim: (r.fields['Claim'] as string[]) || [],
-    Amount: (r.fields['Amount'] as number) || 0,
-    'Payment Date': (r.fields['Payment Date'] as string) || '',
-    'Due Date': (r.fields['Due Date'] as string) || '',
-    Vendor: (r.fields['Vendor'] as string) || '',
-    Description: (r.fields['Description'] as string) || '',
-    'Payment Status': (r.fields['Payment Status'] as string) || '',
-    // Fallback date so rows without Payment Date / Due Date still surface in
-    // the Recently Updated feed, ordered by when they were logged.
-    createdTime: ((r as any)._rawJson?.createdTime as string) || '',
+  const data = unwrap(
+    await supabase.from('payments_log').select('*'),
+    'getPaymentsLog',
+  ) as Array<{
+    id: string;
+    claim_id?: string | null;
+    amount?: number | null;
+    payment_date?: string | null;
+    payment_due_date?: string | null;
+    vendor?: string | null;
+    notes?: string | null;
+    payment_status?: string | null;
+    created_at?: string | null;
+    fields_raw?: Record<string, unknown> | null;
+  }>;
+  return data.map((p) => ({
+    id: p.id,
+    Claim: p.claim_id ? [p.claim_id] : [],
+    Amount: p.amount ?? 0,
+    'Payment Date': p.payment_date ?? '',
+    'Due Date': p.payment_due_date ?? '',
+    Vendor: p.vendor ?? '',
+    Description:
+      (rawObject(p.fields_raw)['Description'] as string | undefined) ?? p.notes ?? '',
+    'Payment Status': p.payment_status ?? '',
+    createdTime: p.created_at ?? '',
   }));
 }
 
 /**
- * A row from the Claims Master "Modules" table.
- * Used to dynamically drive the Submissions tab instead of hardcoded services.
+ * A row from the Modules table.
  */
 export interface ModuleRow {
   id: string;
@@ -167,9 +242,9 @@ export interface ModuleRow {
   Status: string;
   Vendor: string;
   'Payment Amount': number;
-  // Per-service lifecycle mirrors (added by airtable-schema-sync). Optional so
-  // older rows without the new fields still parse cleanly.
-  // Bill To holds a carrier display name ("Allstate", …) or the literal "Client".
+  // Per-service lifecycle mirrors. Optional because the Supabase modules
+  // schema only carries some of these as first-class columns; the rest come
+  // from fields_raw / job_costing fallbacks.
   'Bill To'?: string;
   'Operation Status'?: string;
   'Estimate Status'?: string;
@@ -183,61 +258,104 @@ export interface ModuleRow {
   'Service Status'?: string;
 }
 
-function readSelect(field: unknown): string | undefined {
-  if (!field) return undefined;
-  if (typeof field === 'string') return field;
-  if (typeof field === 'object' && field !== null && 'name' in field) {
-    return (field as { name?: string }).name;
+interface ModuleSupabaseRow {
+  id: string;
+  module_name?: string | null;
+  module_type?: string | null;
+  claim_id?: string | null;
+  status?: string | null;
+  vendor?: string | null;
+  payment_amount?: number | null;
+  bill_to?: string | null;
+  job_costing_record_id?: string | null;
+  restoration_project_record_id?: string | null;
+  fields_raw?: Record<string, unknown> | null;
+}
+
+function readSelect(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && 'name' in value) {
+    const named = (value as { name?: unknown }).name;
+    return typeof named === 'string' ? named : undefined;
   }
   return undefined;
 }
 
-export async function getModulesForClaim(claimRecordId: string): Promise<ModuleRow[]> {
-  const records = await claimsMasterBase('Modules').select().all();
-  return records
-    .filter(r => {
-      const claims = (r.fields['Claim'] as string[]) || [];
-      return claims.includes(claimRecordId);
-    })
-    .map(r => ({
-      id: r.id,
-      // Fall back to Module Type when Module Name is empty
-      'Module Name': (r.fields['Module Name'] as string) || (r.fields['Module Type'] as string) || '',
-      'Module Type': (r.fields['Module Type'] as string) || '',
-      Claim: (r.fields['Claim'] as string[]) || [],
-      Status: readSelect(r.fields['Status']) || '',
-      Vendor: (r.fields['Vendor'] as string) || '',
-      'Payment Amount': (r.fields['Payment Amount'] as number) || 0,
-      'Bill To': readSelect(r.fields['Bill To']),
-      'Operation Status': readSelect(r.fields['Operation Status']),
-      'Estimate Status': readSelect(r.fields['Estimate Status']),
-      // IMPORTANT: keep these as undefined when Airtable doesn't return the
-      // field. Modules schema doesn't carry the $ mirrors (canonical source
-      // is Job Costing in Financials). buildLifecycleViews uses `??` to fall
-      // through to the J value — collapsing to 0 here defeats that fallback.
-      'Approved Estimate Amount': r.fields['Approved Estimate Amount'] as number | undefined,
-      'Has Supplement':
-        r.fields['Has Supplement'] === undefined ? undefined : Boolean(r.fields['Has Supplement']),
-      'Supplement Approved Amount': r.fields['Supplement Approved Amount'] as number | undefined,
-      'Supplement Invoice Mode': readSelect(r.fields['Supplement Invoice Mode']) as 'Append to invoice' | 'Separate invoice' | undefined,
-      'Supplement Separate Invoice Label': r.fields['Supplement Separate Invoice Label'] as string | undefined,
-      'Job Costing Record ID': (r.fields['Job Costing Record ID'] as string) || '',
-      'Restoration Project Record ID': (r.fields['Restoration Project Record ID'] as string) || '',
-      'Service Status': (r.fields['Service Status'] as string) || '',
-    }));
+function mapModule(row: ModuleSupabaseRow): ModuleRow {
+  const raw = rawObject(row.fields_raw);
+  // Lifecycle mirrors live in fields_raw — schema gap noted in migration plan.
+  const approvedRaw = raw['Approved Estimate Amount'];
+  const hasSupRaw = raw['Has Supplement'];
+  const supAmtRaw = raw['Supplement Approved Amount'];
+  const supLabelRaw = raw['Supplement Separate Invoice Label'];
+  return {
+    id: row.id,
+    'Module Name': row.module_name ?? row.module_type ?? '',
+    'Module Type': row.module_type ?? '',
+    Claim: row.claim_id ? [row.claim_id] : [],
+    Status: readSelect(row.status) ?? '',
+    Vendor: row.vendor ?? '',
+    'Payment Amount': row.payment_amount ?? 0,
+    'Bill To': row.bill_to ?? readSelect(raw['Bill To']),
+    'Operation Status': readSelect(raw['Operation Status']),
+    'Estimate Status': readSelect(raw['Estimate Status']),
+    'Approved Estimate Amount':
+      typeof approvedRaw === 'number'
+        ? approvedRaw
+        : typeof approvedRaw === 'string' && approvedRaw !== ''
+          ? Number(approvedRaw)
+          : undefined,
+    'Has Supplement': hasSupRaw === undefined ? undefined : Boolean(hasSupRaw),
+    'Supplement Approved Amount':
+      typeof supAmtRaw === 'number'
+        ? supAmtRaw
+        : typeof supAmtRaw === 'string' && supAmtRaw !== ''
+          ? Number(supAmtRaw)
+          : undefined,
+    'Supplement Invoice Mode': readSelect(raw['Supplement Invoice Mode']) as
+      | 'Append to invoice'
+      | 'Separate invoice'
+      | undefined,
+    'Supplement Separate Invoice Label':
+      typeof supLabelRaw === 'string' ? (supLabelRaw as string) : undefined,
+    'Job Costing Record ID': row.job_costing_record_id ?? '',
+    'Restoration Project Record ID': row.restoration_project_record_id ?? '',
+    'Service Status': typeof raw['Service Status'] === 'string' ? (raw['Service Status'] as string) : '',
+  };
 }
 
+export async function getModulesForClaim(claimRecordId: string): Promise<ModuleRow[]> {
+  const data = unwrap(
+    await supabase.from('modules').select('*').eq('claim_id', claimRecordId),
+    'getModulesForClaim',
+  ) as ModuleSupabaseRow[];
+  return data.map(mapModule);
+}
+
+/**
+ * Persist a couple of summary roll-ups onto the claim row so the
+ * portfolio/table views can read them without re-aggregating. With a
+ * single Supabase DB this is no longer a cross-base "sync" — it's just an
+ * in-place update on the same `claims` row.
+ */
 export async function syncFinancialSummaryToClaimsMaster(
   claimsMasterRecordId: string,
-  summary: FinancialSummary
+  summary: FinancialSummary,
 ): Promise<void> {
-  await claimsMasterBase(TABLE_NAME).update(claimsMasterRecordId, {
-    'RCV': summary.totalRCV,
-    'ACV': summary.totalACV,
-    'Deductible': summary.deductible,
-    'O&P': summary.totalOAndP,
-    'Depreciation': summary.totalDepreciation,
-    'Total Payout': summary.totalReceived,
-    'Total Outstanding Payments': summary.totalOutstanding,
-  });
+  unwrap(
+    await supabase
+      .from('claims')
+      .update({
+        rcv: summary.totalRCV,
+        acv: summary.totalACV,
+        deductible: summary.deductible,
+        o_and_p: summary.totalOAndP,
+        depreciation: summary.totalDepreciation,
+        total_payout: summary.totalReceived,
+        total_outstanding_payments: summary.totalOutstanding,
+      } as never)
+      .eq('id', claimsMasterRecordId),
+    'syncFinancialSummaryToClaimsMaster',
+  );
 }

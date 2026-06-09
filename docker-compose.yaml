@@ -4,18 +4,18 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Client-safe build args only (no PAT, no base IDs).
+        # Client-safe build args only.
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
         VITE_APP_PASSWORD: ${VITE_APP_PASSWORD}
         VITE_LINK_CLAIMS_MASTER: ${VITE_LINK_CLAIMS_MASTER:-}
         VITE_LINK_RESTORATION_OPS: ${VITE_LINK_RESTORATION_OPS:-}
         VITE_BRANDING_LABEL: ${VITE_BRANDING_LABEL:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
     environment:
-      # Server-side only (NEVER pass VITE_AIRTABLE_*).
-      AIRTABLE_PAT: ${AIRTABLE_PAT}
-      AIRTABLE_CLAIMS_MASTER_BASE: ${AIRTABLE_CLAIMS_MASTER_BASE}
-      AIRTABLE_FINANCIALS_BASE: ${AIRTABLE_FINANCIALS_BASE}
-      AIRTABLE_REST_OPS_BASE: ${AIRTABLE_REST_OPS_BASE}
+      # Server-side only.
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
       DISCORD_WEBHOOK: ${DISCORD_WEBHOOK:-}
       PORT: "80"
@@ -23,7 +23,7 @@ services:
       - "80"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:80/api/bases"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:80/api/health"]
       interval: 30s
       timeout: 10s
       start_period: 30s

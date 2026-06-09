@@ -133,7 +133,7 @@ export function InsuranceSubmissionTracker({ claimsMasterRecordId }: InsuranceSu
         normalized.includes('unknown field name') ||
         (normalized.includes('checklist') && normalized.includes('field'))
       ) {
-        setError('The "Checklist" field is missing in Airtable. Add it to the Claims table as a Long text field.');
+        setError('The "checklist" column is missing on the claims table. Add it as a jsonb column.');
       } else {
         setError('Unable to save the checklist right now. Please try again.');
       }
