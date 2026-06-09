@@ -17,6 +17,18 @@ ARG VITE_BRANDING_LABEL
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
 
+# Promote ARGs to ENVs so `npm run build` (Vite) sees them in process.env.
+# Vite reads import.meta.env.VITE_* from process.env at build time and bakes
+# the values into the bundle. Without this, the bundle ships empty strings
+# and the browser throws "supabaseUrl is required".
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_APP_PASSWORD=${VITE_APP_PASSWORD} \
+    VITE_LINK_CLAIMS_MASTER=${VITE_LINK_CLAIMS_MASTER} \
+    VITE_LINK_RESTORATION_OPS=${VITE_LINK_RESTORATION_OPS} \
+    VITE_BRANDING_LABEL=${VITE_BRANDING_LABEL} \
+    VITE_SUPABASE_URL=${VITE_SUPABASE_URL} \
+    VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+
 # Copy source and build the SPA into ./dist
 COPY . .
 RUN npm run build
