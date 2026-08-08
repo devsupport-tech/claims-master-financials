@@ -52,6 +52,7 @@ interface ClaimRow {
   referral_phone?: string | null;
   referral_email?: string | null;
   referral_notes?: string | null;
+  contractor?: string | null;
   total_payout?: number | null;
   total_outstanding_payments?: number | null;
   net_claim_sum?: number | null;
@@ -135,6 +136,7 @@ function mapClaimMaster(row: ClaimRow): ClaimMaster {
     'Referral Phone': row.referral_phone || undefined,
     'Referral Email': row.referral_email || undefined,
     'Referral Notes': row.referral_notes || undefined,
+    Contractor: row.contractor || undefined,
     'Mortgage Company': mortgageCompanyFromJson(row.mortgage),
     'Total Payout': row.total_payout ?? 0,
     'Total Outstanding Payments': row.total_outstanding_payments ?? 0,

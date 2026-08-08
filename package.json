@@ -8,6 +8,7 @@
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "tsx --test server/**/*.test.ts",
     "preview": "vite preview",
     "start": "tsx server/index.ts"
   },
