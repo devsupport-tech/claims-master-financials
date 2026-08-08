@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createProjectExpense, updateProjectExpense } from '@/lib/airtable'
+import { createPlanningExpense, updatePlanningExpense, type ExpenseKind } from '@/services/financial-planning'
 import type { ProjectExpense, ProjectExpenseCategory } from '@/types'
 
 interface ProjectExpenseFormProps {
@@ -25,6 +25,14 @@ const CATEGORIES: ProjectExpenseCategory[] = [
   'General Expenses and Outflows',
   'Others',
 ]
+
+const KIND_BY_CATEGORY: Record<ProjectExpenseCategory, ExpenseKind> = {
+  'Third party contractors': 'Subcontractor',
+  Materials: 'Materials',
+  'Labor Cost': 'Labor',
+  'General Expenses and Outflows': 'General',
+  Others: 'Other',
+}
 
 const INITIAL_STATE = {
   'Cost Name': '',
@@ -95,31 +103,29 @@ export function ProjectExpenseForm({
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const payload: Record<string, any> = {
-        'Cost Name': form['Cost Name'],
-        'Project Expense Category': form['Project Expense Category'],
-        'Billing Entity': form['Billing Entity'],
-        Amount: Number(form.Amount) || 0,
-      }
-      if (form['Invoice Number']) payload['Invoice Number'] = form['Invoice Number']
-      if (form['Invoice Date']) payload['Invoice Date'] = form['Invoice Date']
-      if (form['Scope Notes']) payload['Scope Notes'] = form['Scope Notes']
-      if (!isEditing) {
-        payload.Claim = [claimRecordId]
-        payload['Module Record ID'] = moduleRecordId
+      const payload = {
+        name: form['Cost Name'],
+        expenseKind: KIND_BY_CATEGORY[form['Project Expense Category'] as ProjectExpenseCategory],
+        payerName: 'CBRS Group',
+        payeeName: form['Billing Entity'],
+        amount: Number(form.Amount) || 0,
+        moduleId: moduleRecordId || null,
+        invoiceNumber: form['Invoice Number'],
+        invoiceDate: form['Invoice Date'],
+        scopeNotes: form['Scope Notes'],
       }
 
       if (isEditing) {
-        await updateProjectExpense(editRecord!.id, payload)
+        await updatePlanningExpense(editRecord!.id, payload)
       } else {
-        await createProjectExpense(payload)
+        await createPlanningExpense(claimRecordId, payload)
       }
       setForm({ ...INITIAL_STATE })
       onSuccess()
       onOpenChange(false)
     } catch (err) {
       console.error(`Failed to ${isEditing ? 'update' : 'create'} project expense:`, err)
-      alert(`Failed to ${isEditing ? 'update' : 'create'} project expense. Check the console for details.`)
+      alert((err as Error).message)
     } finally {
       setIsSubmitting(false)
     }

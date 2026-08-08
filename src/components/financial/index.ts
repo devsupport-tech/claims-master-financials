@@ -12,3 +12,6 @@ export { GeneralInfoCard } from './GeneralInfoCard';
 export { ServiceLifecycleCard } from './ServiceLifecycleCard';
 export { ProjectExpensesTable } from './ProjectExpensesTable';
 export { ComparativesCard } from './ComparativesCard';
+export { BudgetCommissionsTab } from './BudgetCommissionsTab';
+export { ContractorPortfolio } from './ContractorPortfolio';
+export { ContractorTerms } from './ContractorTerms';

@@ -13,6 +13,9 @@ import {
   SidebarSearch,
   ServiceLifecycleCard,
   ProjectExpensesTable,
+  BudgetCommissionsTab,
+  ContractorPortfolio,
+  ContractorTerms,
 } from '@/components/financial';
 import {
   getClaimFinancialSummary,
@@ -23,10 +26,6 @@ import {
   deleteAdjusterReport,
   deleteJobCost,
   getPortfolioOverview,
-  getProjectExpenses,
-  getCostPayments,
-  deleteProjectExpense,
-  deleteCostPayment,
 } from '@/lib/airtable';
 import type { PortfolioOverviewData } from '@/lib/airtable';
 import { getAllClaimsMaster, ensureFinancialClaimRecord, syncFinancialSummaryToClaimsMaster, getPaymentsLog } from '@/lib/claims-master';
@@ -48,6 +47,8 @@ import {
   Moon,
   MoreHorizontal,
   ArchiveRestore,
+  HandCoins,
+  Settings2,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
@@ -60,12 +61,13 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, JobCost, ServiceLifecycleView, ProjectExpense, CostPayment } from '@/types';
 import { restoreService } from '@/services/lifecycle-sync';
+import { deletePlanningExpense, deletePlanningPayment, getFinancialPlan } from '@/services/financial-planning';
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
 const BRANDING_LABEL = import.meta.env.VITE_BRANDING_LABEL || '';
 
-type View = 'overview' | 'claims' | 'claim-detail';
+type View = 'overview' | 'claims' | 'claim-detail' | 'contractor-terms';
 
 interface DashboardProps {
   isDark: boolean;
@@ -149,6 +151,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
   // Bumping this counter forces FinancialReportTab to re-fetch its data,
   // so service-tab Comparatives values refresh in place after a save.
   const [lifecycleRefreshSignal, setLifecycleRefreshSignal] = useState(0);
+  const [planningRefreshSignal, setPlanningRefreshSignal] = useState(0);
 
   // Load claims + overview on mount, then poll every 30s to keep data fresh.
   // Polling pauses while viewing a claim detail or while any create/edit dialog is open,
@@ -268,37 +271,49 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
   async function loadClaimDetails(claimRecordId: string) {
     setIsLoadingDetails(true);
     try {
-      const [summaryData, ledgerData, reportsData, costsData, expensesData] =
+      const [summaryData, ledgerData, reportsData, costsData, financialPlan] =
         await Promise.all([
           getClaimFinancialSummary(claimRecordId),
           getFinancialLedger(claimRecordId),
           getAdjusterReports(claimRecordId),
           getJobCosting(claimRecordId),
-          getProjectExpenses(claimRecordId),
+          getFinancialPlan(claimRecordId),
         ]);
 
       setSummary(summaryData as FinancialSummary);
       setLedger(ledgerData as LedgerEntry[]);
       setReports(reportsData as AdjusterReport[]);
       setCosts(costsData as JobCost[]);
-      setExpenses(expensesData as ProjectExpense[]);
-
-      // Cost Payments are pulled in a follow-up call and scoped client-side
-      // to the expenses we just fetched — the Airtable side can't filter by
-      // link-to-filtered-set in one round-trip.
-      const expenseIds = new Set((expensesData as ProjectExpense[]).map((e) => e.id));
-      if (expenseIds.size > 0) {
-        const all = (await getCostPayments()) as CostPayment[];
-        setCostPayments(
-          all.filter(
-            (p) =>
-              Array.isArray(p['Project Expense']) &&
-              p['Project Expense'].some((id) => expenseIds.has(id)),
-          ),
-        );
-      } else {
-        setCostPayments([]);
-      }
+      setExpenses(financialPlan.expenses
+        .filter((row) => row.expenseKind !== 'Commission' && row.expenseKind !== 'Referral Fee')
+        .map((row) => ({
+          id: row.id,
+          'Cost Name': row.name,
+          'Project Expense Category': ({
+            Labor: 'Labor Cost',
+            Materials: 'Materials',
+            Subcontractor: 'Third party contractors',
+            General: 'General Expenses and Outflows',
+            Other: 'Others',
+          } as const)[row.expenseKind as 'Labor' | 'Materials' | 'Subcontractor' | 'General' | 'Other'],
+          'Billing Entity': row.payeeName ?? undefined,
+          Amount: row.effectiveAmount,
+          'Invoice Number': row.invoiceNumber ?? undefined,
+          'Invoice Date': row.invoiceDate ?? undefined,
+          'Scope Notes': row.scopeNotes ?? undefined,
+          'Module Record ID': row.moduleId ?? undefined,
+          Claim: [row.claimId],
+        })));
+      setCostPayments(financialPlan.payments.map((row) => ({
+        id: row.id,
+        'Payment Name': row.paymentName ?? 'Payment',
+        'Project Expense': row.projectExpenseId ? [row.projectExpenseId] : [],
+        Amount: row.amount,
+        'Payment Date': row.paymentDate ?? undefined,
+        Method: (row.method || undefined) as CostPayment['Method'],
+        'Check Number': row.checkNumber ?? undefined,
+        Notes: row.notes ?? undefined,
+      })));
     } catch (error) {
       console.error('Failed to load claim details:', error);
     } finally {
@@ -326,6 +341,11 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
       // the new transaction without flashing loading spinners over the detail view.
       refreshAll(true);
     }
+  }
+
+  function handlePlanningChanged() {
+    setPlanningRefreshSignal((value) => value + 1);
+    void refreshAll(true);
   }
 
   // Edit handlers
@@ -398,11 +418,11 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
           await handleDetailCreated();
           break;
         case 'expense':
-          await deleteProjectExpense(deleteTarget.record.id);
+          await deletePlanningExpense(deleteTarget.record.id);
           await handleDetailCreated();
           break;
         case 'cost-payment':
-          await deleteCostPayment(deleteTarget.record.id);
+          await deletePlanningPayment(deleteTarget.record.id);
           await handleDetailCreated();
           break;
       }
@@ -561,6 +581,18 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
             <ClipboardCheck className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
             {!collapsed && <span>Claims</span>}
           </Button>
+          <Button
+            variant="ghost"
+            className={cn(
+              'w-full justify-start text-slate-300 hover:bg-[#1e293b]/80 hover:text-white',
+              collapsed ? 'justify-center px-0' : 'px-4',
+              view === 'contractor-terms' && 'bg-[#1e293b] text-white shadow-sm hover:bg-[#1e293b]'
+            )}
+            onClick={() => { setView('contractor-terms'); setSelectedClaimId(null); setFinancialRecordId(null); }}
+          >
+            <Settings2 className={cn('h-5 w-5', collapsed ? '' : 'mr-3')} />
+            {!collapsed && <span>Contractor Terms</span>}
+          </Button>
           {CLAIMS_MASTER_URL && (
             <Button
               variant="ghost"
@@ -622,6 +654,13 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
             ) : overview ? (
               <div className="space-y-6">
                 <PortfolioOverview data={overview} />
+                <ContractorPortfolio
+                  refreshSignal={planningRefreshSignal}
+                  onSelectClaim={(claimId) => {
+                    const claim = claims.find((row) => row.id === claimId);
+                    if (claim) void handleSelectClaim(claim);
+                  }}
+                />
                 <ClaimsTable
                   claims={claims}
                   isLoading={isLoading}
@@ -645,6 +684,8 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
               onSelectClaim={handleSelectClaim}
             />
           )}
+
+          {view === 'contractor-terms' && <ContractorTerms />}
 
           {/* Claim Detail View */}
           {view === 'claim-detail' && (
@@ -743,13 +784,17 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                   </Card>
                 )}
 
-                {/* Supporting tabs — Ledger first, then one tab per service
+                {/* Budget & Commissions first, then Ledger and one tab per service
                     (Water Mitigation, Rebuild, etc.) sourced from the lifecycle
                     views bubbled up by FinancialReportTab, and a "More" tab
                     that holds Adjuster Reports / Mortgage / Job Costing /
                     Submissions for occasional access. */}
-                <Tabs defaultValue="ledger" className="space-y-4">
+                <Tabs defaultValue="budget-commissions" className="space-y-4">
                   <TabsList className="flex-wrap h-auto">
+                    <TabsTrigger value="budget-commissions" className="flex items-center gap-2">
+                      <HandCoins className="h-4 w-4" />
+                      Budget & Commissions
+                    </TabsTrigger>
                     <TabsTrigger value="ledger" className="flex items-center gap-2">
                       <Receipt className="h-4 w-4" />
                       Ledger
@@ -768,6 +813,16 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                       More
                     </TabsTrigger>
                   </TabsList>
+
+                  {selectedClaim && (
+                    <TabsContent value="budget-commissions">
+                      <BudgetCommissionsTab
+                        claimRef={selectedClaim.id}
+                        refreshSignal={planningRefreshSignal}
+                        onChanged={handlePlanningChanged}
+                      />
+                    </TabsContent>
+                  )}
 
                   <TabsContent value="ledger">
                     <div className="space-y-4">

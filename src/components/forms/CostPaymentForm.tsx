@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createCostPayment } from '@/lib/airtable'
+import { createPlanningPayment } from '@/services/financial-planning'
 import type { CostPaymentMethod, ProjectExpense } from '@/types'
 
 interface CostPaymentFormProps {
@@ -80,23 +80,18 @@ export function CostPaymentForm({
     if (!validate() || !expense) return
     setIsSubmitting(true)
     try {
-      const billing = expense['Billing Entity'] || 'Payment'
-      const payload: Record<string, any> = {
-        'Payment Name': `${billing} · ${form['Payment Date']}`,
-        'Project Expense': [expense.id],
-        Amount: Number(form.Amount) || 0,
-        'Payment Date': form['Payment Date'],
-      }
-      if (form.Method) payload.Method = form.Method
-      if (form['Check Number']) payload['Check Number'] = form['Check Number']
-      if (form.Notes) payload.Notes = form.Notes
-
-      await createCostPayment(payload)
+      await createPlanningPayment(expense.id, {
+        amount: Number(form.Amount) || 0,
+        paymentDate: form['Payment Date'],
+        method: form.Method || undefined,
+        checkNumber: form['Check Number'] || undefined,
+        notes: form.Notes || undefined,
+      })
       onSuccess()
       onOpenChange(false)
     } catch (err) {
       console.error('Failed to log cost payment:', err)
-      alert('Failed to log payment. Check the console for details.')
+      alert((err as Error).message)
     } finally {
       setIsSubmitting(false)
     }

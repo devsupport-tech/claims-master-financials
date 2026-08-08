@@ -48,6 +48,7 @@ export interface ClaimMaster {
   'Referral Phone'?: string;
   'Referral Email'?: string;
   'Referral Notes'?: string;
+  Contractor?: string;
   'Mortgage Company': string;
   'Total Payout': number;
   'Total Outstanding Payments': number;

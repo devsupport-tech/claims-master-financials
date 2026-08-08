@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 
 import { supabaseAdmin } from "./lib/supabase.js";
+import { financialPlanningRouter } from "./routes/financial-planning.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3001);
@@ -242,6 +243,8 @@ app.get("/api/claims", asyncRoute(async () => {
   if (error) throw new Error(error.message);
   return data ?? [];
 }));
+
+app.use("/api/financial-planning", financialPlanningRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
