@@ -24,6 +24,7 @@
 
 import { supabase } from './supabase';
 import type { ComparativeRow, ComparativesData } from '@/types';
+import { getClaimRowsFromApi } from '@/services/claims-api';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Legacy multi-base bootstrap shims — no-ops in the single-Supabase world.
@@ -148,8 +149,8 @@ function unmapClaim(data: Record<string, unknown>): Record<string, unknown> {
 }
 
 export async function getAllClaims() {
-  const data = unwrap(await supabase.from('claims').select('*'), 'getAllClaims');
-  return (data as ClaimRow[]).map(mapClaim);
+  const data = await getClaimRowsFromApi();
+  return (data as unknown as ClaimRow[]).map(mapClaim);
 }
 
 export async function getClaimByClaimId(claimId: string) {
