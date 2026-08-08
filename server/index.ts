@@ -237,6 +237,12 @@ app.post("/api/sync/payments", asyncRoute(async (req) => {
 
 app.post("/api/sync/reconcile", asyncRoute(async () => ({ ok: true, reconciled: 0 })));
 
+app.get("/api/claims", asyncRoute(async () => {
+  const { data, error } = await supabaseAdmin.from("claims").select("*");
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}));
+
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });

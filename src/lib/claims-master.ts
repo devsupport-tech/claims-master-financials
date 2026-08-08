@@ -19,6 +19,7 @@
  */
 import { supabase } from './supabase';
 import type { ClaimMaster, FinancialSummary } from '@/types';
+import { getClaimRowsFromApi } from '@/services/claims-api';
 
 interface ClaimRow {
   id: string;
@@ -145,8 +146,8 @@ function mapClaimMaster(row: ClaimRow): ClaimMaster {
 }
 
 export async function getAllClaimsMaster(): Promise<ClaimMaster[]> {
-  const data = unwrap(await supabase.from('claims').select('*'), 'getAllClaimsMaster');
-  return (data as ClaimRow[]).map(mapClaimMaster);
+  const data = await getClaimRowsFromApi();
+  return (data as unknown as ClaimRow[]).map(mapClaimMaster);
 }
 
 /**
