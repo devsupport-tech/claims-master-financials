@@ -190,6 +190,7 @@ export async function deleteClaim(recordId: string) {
 interface LedgerRow {
   id: string;
   claim_id?: string | null;
+  module_id?: string | null;
   entry_name?: string | null;
   entry_type?: string | null;
   direction?: string | null;
@@ -220,6 +221,7 @@ function mapLedger(row: LedgerRow) {
     Reconciled: Boolean(row.reconciled),
     'Reconciled Date': row.reconciled_date ?? '',
     Claim: row.claim_id ? [row.claim_id] : [],
+    'Module Record ID': row.module_id ?? undefined,
     ...raw,
   };
 }
@@ -246,6 +248,10 @@ function unmapLedger(input: Record<string, unknown>): Record<string, unknown> {
       // Airtable form payload passes `Claim: [recId]`; store the first value as
       // the foreign-key uuid in claim_id.
       if (Array.isArray(v) && v.length > 0) out.claim_id = v[0];
+      continue;
+    }
+    if (k === 'Module Record ID') {
+      out.module_id = v || null;
       continue;
     }
     if (k in PASCAL_TO_LEDGER_COLUMN) {
@@ -551,15 +557,14 @@ export async function deleteMortgageRelease(recordId: string) {
 // ────────────────────────────────────────────────────────────────────────────
 // JOB COSTING
 //
-// Lifecycle/supplement extras (Submitted Estimate Amount, Approved Estimate
-// Amount, Has Supplement, Supplement Approved Amount, Supplement Invoice
-// Mode, Supplement Separate Invoice Label, Module Record ID) ride in
-// fields_raw — see migration notes / risks in the plan.
+// Manual job-cost rows keep module_id null. The service-budget row is linked
+// to exactly one module and uses the typed lifecycle columns below.
 // ────────────────────────────────────────────────────────────────────────────
 
 interface JobCostRow {
   id: string;
   claim_id?: string | null;
+  module_id?: string | null;
   cost_name?: string | null;
   trade_category?: string | null;
   vendor_subcontractor?: string | null;
@@ -573,6 +578,13 @@ interface JobCostRow {
   scope_description?: string | null;
   notes?: string | null;
   created_at?: string | null;
+  submitted_estimate_amount?: number | null;
+  approved_estimate_amount?: number | null;
+  estimate_approved_date?: string | null;
+  has_supplement?: boolean | null;
+  supplement_approved_amount?: number | null;
+  supplement_invoice_mode?: string | null;
+  supplement_invoice_label?: string | null;
   fields_raw?: Record<string, unknown> | null;
 }
 
@@ -594,11 +606,15 @@ function mapJobCost(row: JobCostRow) {
     'Scope Description': row.scope_description ?? '',
     Notes: row.notes ?? '',
     Claim: row.claim_id ? [row.claim_id] : [],
-    // fields_raw spread surfaces all the lifecycle extras:
-    //   Submitted Estimate Amount, Approved Estimate Amount, Has Supplement,
-    //   Supplement Approved Amount, Supplement Invoice Mode,
-    //   Supplement Separate Invoice Label, Module Record ID.
     ...raw,
+    'Submitted Estimate Amount': row.submitted_estimate_amount ?? raw['Submitted Estimate Amount'] ?? 0,
+    'Approved Estimate Amount': row.approved_estimate_amount ?? raw['Approved Estimate Amount'] ?? row.xactimate_budget ?? 0,
+    'Estimate Approved Date': row.estimate_approved_date ?? undefined,
+    'Has Supplement': row.has_supplement ?? raw['Has Supplement'] ?? false,
+    'Supplement Approved Amount': row.supplement_approved_amount ?? raw['Supplement Approved Amount'] ?? 0,
+    'Supplement Invoice Mode': row.supplement_invoice_mode ?? raw['Supplement Invoice Mode'] ?? 'Append to invoice',
+    'Supplement Separate Invoice Label': row.supplement_invoice_label ?? raw['Supplement Separate Invoice Label'] ?? undefined,
+    'Module Record ID': row.module_id ?? raw['Module Record ID'] ?? undefined,
   };
 }
 
@@ -677,6 +693,7 @@ export async function deleteJobCost(recordId: string) {
 interface ProjectExpenseRow {
   id: string;
   claim_id?: string | null;
+  module_id?: string | null;
   expense_name?: string | null;
   category?: string | null;
   amount?: number | null;
@@ -703,9 +720,8 @@ function mapProjectExpense(row: ProjectExpenseRow) {
     Reimbursable: Boolean(row.reimbursable),
     Notes: row.notes ?? '',
     Claim: row.claim_id ? [row.claim_id] : [],
-    // fields_raw fills in Billing Entity / Invoice Number / Scope Notes /
-    // Module Record ID and anything else the UI stashed.
     ...raw,
+    'Module Record ID': row.module_id ?? raw['Module Record ID'] ?? undefined,
   };
 }
 
@@ -716,6 +732,9 @@ function unmapProjectExpense(input: Record<string, unknown>): Record<string, unk
     switch (k) {
       case 'Claim':
         if (Array.isArray(v) && v.length > 0) out.claim_id = v[0];
+        break;
+      case 'Module Record ID':
+        out.module_id = v || null;
         break;
       case 'Cost Name':
         out.expense_name = v;
