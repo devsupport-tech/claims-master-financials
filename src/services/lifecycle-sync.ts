@@ -1,20 +1,17 @@
 /**
  * Frontend wrapper for the cross-app service lifecycle sidecar endpoints.
  *
- * The Financials app is now the canonical place to edit service-level $
- * fields — Approved Estimate Amount, Has Supplement, Supplement Approved
- * Amount, Supplement Invoice Mode, Supplement Separate Invoice Label.
- *
- * VEC and Restoration Ops display these values read-only; the sidecar's
- * /api/sync/* routes (mounted in server/index.ts) hold the PAT and write
- * across all three contractor bases.
+ * Both connected applications edit the same typed lifecycle fields through
+ * server endpoints backed by transactional PostgreSQL functions.
  */
+
+import type { ServiceLifecycleView } from '@/types';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
 const SYNC_BASE = `${API_BASE_URL}/sync`;
 
 async function syncRequest<T>(
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -55,7 +52,10 @@ export async function approveEstimate(
   moduleRecordId: string,
   payload: ApproveEstimatePayload,
 ): Promise<unknown> {
-  return syncRequest('POST', `/services/${moduleRecordId}/approve-estimate`, payload);
+  return syncRequest('POST', `/services/${moduleRecordId}/estimate`, {
+    estimateStatus: 'Approved',
+    ...payload,
+  });
 }
 
 export interface SetSubmittedEstimatePayload {
@@ -73,7 +73,7 @@ export async function setSubmittedEstimate(
   moduleRecordId: string,
   payload: SetSubmittedEstimatePayload,
 ): Promise<unknown> {
-  return syncRequest('POST', `/services/${moduleRecordId}/submitted-estimate`, payload);
+  return syncRequest('POST', `/services/${moduleRecordId}/estimate`, payload);
 }
 
 export interface SetSupplementPayload {
@@ -81,6 +81,7 @@ export interface SetSupplementPayload {
   amount?: number;
   mode?: SupplementInvoiceMode;
   separateInvoiceLabel?: string;
+  supplementStatus?: 'Draft' | 'For Review' | 'Submitted' | 'Approved';
 }
 
 export async function setSupplement(
@@ -88,4 +89,35 @@ export async function setSupplement(
   payload: SetSupplementPayload,
 ): Promise<unknown> {
   return syncRequest('POST', `/services/${moduleRecordId}/supplement`, payload);
+}
+
+export async function getClaimServiceLifecycle(claimRef: string): Promise<ServiceLifecycleView[]> {
+  const result = await syncRequest<{ services: ServiceLifecycleView[] }>(
+    'GET',
+    `/claims/${encodeURIComponent(claimRef)}/services`,
+  );
+  return result.services ?? [];
+}
+
+export async function removeService(moduleRecordId: string) {
+  return syncRequest<{ ok: true; action: 'deleted' | 'archived' }>(
+    'DELETE',
+    `/services/${moduleRecordId}`,
+  );
+}
+
+export async function restoreService(moduleRecordId: string) {
+  return syncRequest('POST', `/services/${moduleRecordId}/restore`);
+}
+
+export async function addServicePayment(payload: {
+  claimId: string;
+  moduleId?: string;
+  amount: number;
+  category?: string;
+  date?: string;
+  entryName?: string;
+  entryType?: string;
+}) {
+  return syncRequest('POST', '/payments', payload);
 }

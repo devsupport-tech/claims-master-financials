@@ -559,6 +559,7 @@ export type Database = {
           entry_type: string | null
           fields_raw: Json | null
           id: string
+          module_id: string | null
           payer_payee: string | null
           reconciled: boolean | null
           reconciled_date: string | null
@@ -578,6 +579,7 @@ export type Database = {
           entry_type?: string | null
           fields_raw?: Json | null
           id?: string
+          module_id?: string | null
           payer_payee?: string | null
           reconciled?: boolean | null
           reconciled_date?: string | null
@@ -597,6 +599,7 @@ export type Database = {
           entry_type?: string | null
           fields_raw?: Json | null
           id?: string
+          module_id?: string | null
           payer_payee?: string | null
           reconciled?: boolean | null
           reconciled_date?: string | null
@@ -610,22 +613,37 @@ export type Database = {
             referencedRelation: "claims"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "financial_ledger_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
         ]
       }
       job_costing: {
         Row: {
           actual_cost: number | null
+          approved_estimate_amount: number
           airtable_id: string | null
           claim_id: string | null
           cost_name: string | null
           created_at: string | null
+          estimate_approved_date: string | null
           fields_raw: Json | null
+          has_supplement: boolean
           id: string
           invoice_date: string | null
           invoice_number: string | null
+          module_id: string | null
           notes: string | null
           payment_status: string | null
           scope_description: string | null
+          submitted_estimate_amount: number
+          supplement_approved_amount: number
+          supplement_invoice_label: string | null
+          supplement_invoice_mode: string
           trade_category: string | null
           updated_at: string | null
           variance: number | null
@@ -635,17 +653,25 @@ export type Database = {
         }
         Insert: {
           actual_cost?: number | null
+          approved_estimate_amount?: number
           airtable_id?: string | null
           claim_id?: string | null
           cost_name?: string | null
           created_at?: string | null
+          estimate_approved_date?: string | null
           fields_raw?: Json | null
+          has_supplement?: boolean
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
+          module_id?: string | null
           notes?: string | null
           payment_status?: string | null
           scope_description?: string | null
+          submitted_estimate_amount?: number
+          supplement_approved_amount?: number
+          supplement_invoice_label?: string | null
+          supplement_invoice_mode?: string
           trade_category?: string | null
           updated_at?: string | null
           variance?: number | null
@@ -655,17 +681,25 @@ export type Database = {
         }
         Update: {
           actual_cost?: number | null
+          approved_estimate_amount?: number
           airtable_id?: string | null
           claim_id?: string | null
           cost_name?: string | null
           created_at?: string | null
+          estimate_approved_date?: string | null
           fields_raw?: Json | null
+          has_supplement?: boolean
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
+          module_id?: string | null
           notes?: string | null
           payment_status?: string | null
           scope_description?: string | null
+          submitted_estimate_amount?: number
+          supplement_approved_amount?: number
+          supplement_invoice_label?: string | null
+          supplement_invoice_mode?: string
           trade_category?: string | null
           updated_at?: string | null
           variance?: number | null
@@ -679,6 +713,13 @@ export type Database = {
             columns: ["claim_id"]
             isOneToOne: false
             referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_costing_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: true
+            referencedRelation: "modules"
             referencedColumns: ["id"]
           },
         ]
@@ -741,6 +782,7 @@ export type Database = {
       }
       modules: {
         Row: {
+          archived_at: string | null
           airtable_id: string | null
           approval_status: string | null
           bill_to: string | null
@@ -750,6 +792,7 @@ export type Database = {
           days_running: number | null
           drive_module_folder_link: string | null
           end_date: string | null
+          estimate_status: string
           estimated_finish_date: string | null
           estimated_items: string | null
           extension_history: Json | null
@@ -797,6 +840,7 @@ export type Database = {
           vendor_contact: string | null
         }
         Insert: {
+          archived_at?: string | null
           airtable_id?: string | null
           approval_status?: string | null
           bill_to?: string | null
@@ -806,6 +850,7 @@ export type Database = {
           days_running?: number | null
           drive_module_folder_link?: string | null
           end_date?: string | null
+          estimate_status?: string
           estimated_finish_date?: string | null
           estimated_items?: string | null
           extension_history?: Json | null
@@ -853,6 +898,7 @@ export type Database = {
           vendor_contact?: string | null
         }
         Update: {
+          archived_at?: string | null
           airtable_id?: string | null
           approval_status?: string | null
           bill_to?: string | null
@@ -862,6 +908,7 @@ export type Database = {
           days_running?: number | null
           drive_module_folder_link?: string | null
           end_date?: string | null
+          estimate_status?: string
           estimated_finish_date?: string | null
           estimated_items?: string | null
           extension_history?: Json | null
@@ -1167,6 +1214,7 @@ export type Database = {
           expense_name: string | null
           fields_raw: Json | null
           id: string
+          module_id: string | null
           notes: string | null
           payment_method: string | null
           reimbursable: boolean | null
@@ -1183,6 +1231,7 @@ export type Database = {
           expense_name?: string | null
           fields_raw?: Json | null
           id?: string
+          module_id?: string | null
           notes?: string | null
           payment_method?: string | null
           reimbursable?: boolean | null
@@ -1199,6 +1248,7 @@ export type Database = {
           expense_name?: string | null
           fields_raw?: Json | null
           id?: string
+          module_id?: string | null
           notes?: string | null
           payment_method?: string | null
           reimbursable?: boolean | null
@@ -1211,6 +1261,13 @@ export type Database = {
             columns: ["claim_id"]
             isOneToOne: false
             referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_expenses_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
             referencedColumns: ["id"]
           },
         ]
@@ -1587,7 +1644,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      remove_or_archive_service: {
+        Args: { p_module_id: string }
+        Returns: Json
+      }
+      restore_service: {
+        Args: { p_module_id: string }
+        Returns: Json
+      }
+      save_service_estimate: {
+        Args: {
+          p_approved_amount?: number
+          p_approved_date?: string
+          p_estimate_status?: string
+          p_module_id: string
+          p_submitted_amount?: number
+        }
+        Returns: Json
+      }
+      save_service_supplement: {
+        Args: {
+          p_amount?: number
+          p_has_supplement: boolean
+          p_label?: string
+          p_mode?: string
+          p_module_id: string
+          p_supplement_status?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

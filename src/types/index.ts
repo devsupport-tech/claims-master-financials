@@ -96,6 +96,7 @@ export interface LedgerEntry {
   id: string;
   'Entry Name': string;
   Claim?: string[];
+  'Module Record ID'?: string;
   'Entry Type': 'Insurance Payment' | 'Homeowner Payment' | 'Mortgage Release' | 'Vendor Payment' | 'Adjustment';
   Direction: 'Inflow' | 'Outflow';
   Amount: number;
@@ -189,6 +190,7 @@ export interface JobCost {
   // Per-service lifecycle (added by airtable-schema-sync)
   'Submitted Estimate Amount'?: number;
   'Approved Estimate Amount'?: number;
+  'Estimate Approved Date'?: string;
   'Has Supplement'?: boolean;
   'Supplement Approved Amount'?: number;
   'Supplement Invoice Mode'?: 'Append to invoice' | 'Separate invoice';
@@ -211,13 +213,17 @@ export interface ServiceLifecycleView {
   billTo?: string;
   operationStatus?: string;
   estimateStatus?: string;
+  estimateApprovedDate?: string;
   submittedEstimateAmount: number;
   approvedEstimateAmount: number;
   hasSupplement: boolean;
   supplementApprovedAmount: number;
   supplementInvoiceMode: 'Append to invoice' | 'Separate invoice';
   supplementSeparateInvoiceLabel?: string;
+  supplementStatus?: 'Draft' | 'For Review' | 'Submitted' | 'Approved';
+  archivedAt?: string;
   paidAmount: number;
+  expenseAmount?: number;
   jobCosting?: JobCost;
   supplementJobCosting?: JobCost;
   payments: LedgerEntry[];

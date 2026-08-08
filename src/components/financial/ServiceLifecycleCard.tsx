@@ -1,17 +1,9 @@
 /**
- * Per-service lifecycle card for the Financials app — the canonical editor
- * for service-level $ fields.
- *
- * Read-only on Bill To / Operation / Estimate Status (those are owned by
- * Claims Master + Restoration Ops respectively). Editable here:
- *   - Approved Estimate Amount
- *   - Has Supplement + Supplement Approved Amount + Mode + Separate Label
- *   - Add Payment CTA (pre-fills ledger entry with Trade Category / J' label)
- *
- * VEC and Rest Ops just display these values and link out to this card.
+ * Per-service lifecycle card. Claims Master and Financials both edit these
+ * values through the same transactional database operations.
  */
 import { useEffect, useState, useMemo } from 'react';
-import { DollarSign, Save, Wrench } from 'lucide-react';
+import { DollarSign, Save, Trash2, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrency } from '@/lib/utils';
 import { derivePaymentStatus, paymentStatusBadge } from '@/lib/payment-status';
-import { approveEstimate, setSubmittedEstimate, setSupplement } from '@/services/lifecycle-sync';
+import { approveEstimate, removeService, setSubmittedEstimate, setSupplement } from '@/services/lifecycle-sync';
 import type { ServiceLifecycleView } from '@/types';
 
 interface Props {
@@ -30,7 +22,7 @@ interface Props {
    * Pre-fills the FinancialLedger "Add Entry" form with a Category matching
    * either the main Trade Category or the supplement separate invoice label.
    */
-  onAddPayment?: (defaults: { category: string; suggestedAmount?: number }) => void;
+  onAddPayment?: (defaults: { moduleId: string; category: string; suggestedAmount?: number }) => void;
   /** Fired after a successful save so the parent can refetch. */
   onChanged?: () => void;
 }
@@ -40,19 +32,27 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
   // re-fetches and the view object changes.
   const [submittedAmt, setSubmittedAmt] = useState<number>(view.submittedEstimateAmount);
   const [approvedAmt, setApprovedAmt] = useState<number>(view.approvedEstimateAmount);
+  const [approvedDate, setApprovedDate] = useState<string>(view.estimateApprovedDate ?? '');
   const [hasSup, setHasSup] = useState<boolean>(view.hasSupplement);
+  const [supMode, setSupMode] = useState<'Append to invoice' | 'Separate invoice'>(view.supplementInvoiceMode);
+  const [supLabel, setSupLabel] = useState(view.supplementSeparateInvoiceLabel ?? `${view.serviceName} Supplement`);
+  const [supStatus, setSupStatus] = useState(view.supplementStatus ?? 'Draft');
   // "Final Approved Amount" = Approved Estimate + Supplement. The user types
   // the carrier's new full figure; we derive the supplement increment.
   const [finalApprovedAmt, setFinalApprovedAmt] = useState<number>(
     view.approvedEstimateAmount + view.supplementApprovedAmount,
   );
-  const [busy, setBusy] = useState<'approve' | 'supplement' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'supplement' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => setSubmittedAmt(view.submittedEstimateAmount), [view.submittedEstimateAmount]);
   useEffect(() => setApprovedAmt(view.approvedEstimateAmount), [view.approvedEstimateAmount]);
+  useEffect(() => setApprovedDate(view.estimateApprovedDate ?? ''), [view.estimateApprovedDate]);
   useEffect(() => setHasSup(view.hasSupplement), [view.hasSupplement]);
+  useEffect(() => setSupMode(view.supplementInvoiceMode), [view.supplementInvoiceMode]);
+  useEffect(() => setSupLabel(view.supplementSeparateInvoiceLabel ?? `${view.serviceName} Supplement`), [view.supplementSeparateInvoiceLabel, view.serviceName]);
+  useEffect(() => setSupStatus(view.supplementStatus ?? 'Draft'), [view.supplementStatus]);
   useEffect(() => {
     setFinalApprovedAmt(view.approvedEstimateAmount + view.supplementApprovedAmount);
   }, [view.approvedEstimateAmount, view.supplementApprovedAmount]);
@@ -60,7 +60,9 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
   const supplementIncrement = Math.max(0, finalApprovedAmt - approvedAmt);
   const totalClaimValue = approvedAmt + (hasSup ? supplementIncrement : 0);
   const comparativesDirty =
-    submittedAmt !== view.submittedEstimateAmount || approvedAmt !== view.approvedEstimateAmount;
+    submittedAmt !== view.submittedEstimateAmount ||
+    approvedAmt !== view.approvedEstimateAmount ||
+    approvedDate !== (view.estimateApprovedDate ?? '');
   const supplementPaid =
     hasSup && supplementIncrement > 0 && view.paidAmount >= approvedAmt + supplementIncrement;
 
@@ -80,6 +82,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
         await approveEstimate(view.moduleRecordId, {
           approvedAmount: approvedAmt,
           submittedAmount: submittedAmt,
+          approvedDateISO: approvedDate || undefined,
         });
       } else {
         // Submitted-only path: capture the carrier-bound figure without
@@ -88,7 +91,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
           submittedAmount: submittedAmt,
         });
       }
-      setSuccess('Comparatives saved and synced to all bases.');
+      setSuccess('Estimate saved.');
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save comparatives');
@@ -102,17 +105,35 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
     setError(null);
     setSuccess(null);
     try {
-      // Always Append mode — the user enters the Final Approved Amount, and
-      // we derive the supplement increment (Final − Approved Estimate).
       await setSupplement(view.moduleRecordId, {
         hasSupplement: hasSup,
-        amount: hasSup ? supplementIncrement : undefined,
-        mode: hasSup ? 'Append to invoice' : undefined,
+        amount: hasSup ? supplementIncrement : 0,
+        mode: supMode,
+        separateInvoiceLabel: supMode === 'Separate invoice' ? supLabel : undefined,
+        supplementStatus: supStatus,
       });
       setSuccess(hasSup ? 'Supplement saved.' : 'Supplement removed.');
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save supplement');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRemove = async () => {
+    const confirmed = window.confirm(
+      `Remove "${view.serviceName}"?\n\nUnused services are deleted. Services with job costs, payments, expenses, or other financial history are archived and can be restored.`,
+    );
+    if (!confirmed) return;
+    setBusy('remove');
+    setError(null);
+    try {
+      const result = await removeService(view.moduleRecordId);
+      setSuccess(result.action === 'archived' ? 'Service archived.' : 'Service deleted.');
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to remove service');
     } finally {
       setBusy(null);
     }
@@ -209,7 +230,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
               {busy === 'approve' ? 'Saving…' : view.approvedEstimateAmount > 0 ? 'Re-sync' : 'Approve & sync'}
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
               <Label htmlFor={`submitted-${view.moduleRecordId}`} className="text-xs uppercase tracking-wide text-muted-foreground">
                 Submitted Estimate Amount
@@ -247,6 +268,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
                     className="gap-1 whitespace-nowrap"
                     onClick={() =>
                       onAddPayment({
+                        moduleId: view.moduleRecordId,
                         category: view.serviceName,
                         suggestedAmount: derived.remaining,
                       })
@@ -257,6 +279,12 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
                   </Button>
                 )}
               </div>
+            </div>
+            <div>
+              <Label htmlFor={`approved-date-${view.moduleRecordId}`} className="text-xs uppercase tracking-wide text-muted-foreground">
+                Approved Date
+              </Label>
+              <Input id={`approved-date-${view.moduleRecordId}`} type="date" value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} className="mt-1" />
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -308,8 +336,8 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
           </p>
         </div>
 
-        {/* Supplement (always Append mode — user enters Final Approved
-            Amount and we derive the increment). */}
+        {/* The user enters the final approved total; the stored supplement is
+            the increment over the base approved estimate. */}
         <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
             <Checkbox
@@ -323,7 +351,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
           </div>
           {hasSup && (
             <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div>
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                     Final Approved Amount
@@ -342,7 +370,29 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
                     <span className="font-semibold">{formatCurrency(supplementIncrement)}</span>
                   </p>
                 </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Invoice Mode</Label>
+                  <select value={supMode} onChange={(e) => setSupMode(e.target.value as typeof supMode)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="Append to invoice">Append to invoice</option>
+                    <option value="Separate invoice">Separate invoice</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Supplement Status</Label>
+                  <select value={supStatus} onChange={(e) => setSupStatus(e.target.value as typeof supStatus)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="Draft">Draft</option>
+                    <option value="For Review">For Review</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Approved">Approved</option>
+                  </select>
+                </div>
               </div>
+              {supMode === 'Separate invoice' && (
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Separate Invoice Label</Label>
+                  <Input value={supLabel} onChange={(e) => setSupLabel(e.target.value)} className="mt-1" />
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background p-3">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Supplement Amount: </span>
@@ -358,6 +408,7 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
                       disabled={supplementIncrement <= 0}
                       onClick={() =>
                         onAddPayment({
+                          moduleId: view.moduleRecordId,
                           category: view.serviceName,
                           suggestedAmount: supplementIncrement,
                         })
@@ -394,6 +445,13 @@ export function ServiceLifecycleCard({ view, onAddPayment, onChanged }: Props) {
             {error}
           </p>
         )}
+
+        <div className="flex justify-end border-t pt-3">
+          <Button type="button" size="sm" variant="ghost" onClick={handleRemove} disabled={busy === 'remove'} className="text-red-600">
+            <Trash2 className="mr-1 h-4 w-4" />
+            {busy === 'remove' ? 'Removing…' : 'Remove service'}
+          </Button>
+        </div>
 
       </CardContent>
     </Card>

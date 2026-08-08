@@ -47,6 +47,7 @@ import {
   Sun,
   Moon,
   MoreHorizontal,
+  ArchiveRestore,
 } from 'lucide-react';
 import {
   LedgerEntryForm,
@@ -58,6 +59,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import type { ClaimMaster, FinancialSummary, LedgerEntry, AdjusterReport, JobCost, ServiceLifecycleView, ProjectExpense, CostPayment } from '@/types';
+import { restoreService } from '@/services/lifecycle-sync';
 
 const CLAIMS_MASTER_URL = import.meta.env.VITE_LINK_CLAIMS_MASTER || '';
 const RESTORATION_OPS_URL = import.meta.env.VITE_LINK_RESTORATION_OPS || '';
@@ -138,9 +140,12 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
   const [costs, setCosts] = useState<JobCost[]>([]);
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [costPayments, setCostPayments] = useState<CostPayment[]>([]);
-  // Lifecycle views are produced by FinancialReportTab from Modules+JobCosting+Ledger;
-  // bubbled up so the supporting tabs below can render one tab per service.
+  // Lifecycle views come from the claim-scoped sidecar join and bubble up so
+  // the supporting tabs below can render one tab per active service.
   const [lifecycleViews, setLifecycleViews] = useState<ServiceLifecycleView[]>([]);
+  const [restoringServiceId, setRestoringServiceId] = useState<string | null>(null);
+  const activeLifecycleViews = lifecycleViews.filter((view) => !view.archivedAt);
+  const archivedLifecycleViews = lifecycleViews.filter((view) => Boolean(view.archivedAt));
   // Bumping this counter forces FinancialReportTab to re-fetch its data,
   // so service-tab Comparatives values refresh in place after a save.
   const [lifecycleRefreshSignal, setLifecycleRefreshSignal] = useState(0);
@@ -210,7 +215,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
   // Open the Add Ledger Entry form pre-filled to record a payment against a
   // specific service. Used by ServiceLifecycleCard "Add payment" CTAs from
   // both the Financial Report section and the per-service supporting tabs.
-  function handleAddServicePayment(defaults: { category: string; suggestedAmount?: number }) {
+  function handleAddServicePayment(defaults: { moduleId: string; category: string; suggestedAmount?: number }) {
     ensureBridgeAndOpenForm(() => {
       // CREATE mode with prefill — NOT edit mode (which requires a real
       // record id and would 500 on save).
@@ -222,10 +227,23 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
         Amount: defaults.suggestedAmount ?? 0,
         Date: new Date().toISOString().slice(0, 10),
         Category: defaults.category,
+        'Module Record ID': defaults.moduleId,
         Reconciled: false,
       });
       setShowLedgerForm(true);
     });
+  }
+
+  async function handleRestoreService(moduleId: string) {
+    setRestoringServiceId(moduleId);
+    try {
+      await restoreService(moduleId);
+      setLifecycleRefreshSignal((n) => n + 1);
+    } catch (error) {
+      console.error('Failed to restore service:', error);
+    } finally {
+      setRestoringServiceId(null);
+    }
   }
 
   // Ensure financial record exists before opening a form (retry if bridge failed on claim select)
@@ -699,6 +717,32 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                 {/* Single row: Outstanding · Gross Profit · Payment Sources · Job Costing. */}
                 {summary && <FinancialSummaryCard summary={summary} variant="rest" />}
 
+                {archivedLifecycleViews.length > 0 && (
+                  <Card>
+                    <CardContent className="space-y-3 py-4">
+                      <h3 className="text-sm font-semibold">Archived services</h3>
+                      {archivedLifecycleViews.map((service) => {
+                        const historicalTotal = service.approvedEstimateAmount +
+                          (service.hasSupplement ? service.supplementApprovedAmount : 0);
+                        return (
+                          <div key={service.moduleRecordId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3">
+                            <div>
+                              <p className="text-sm font-medium">{service.serviceName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Historical approved total: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(historicalTotal)}
+                              </p>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => handleRestoreService(service.moduleRecordId)} disabled={restoringServiceId === service.moduleRecordId}>
+                              <ArchiveRestore className="mr-1 h-4 w-4" />
+                              {restoringServiceId === service.moduleRecordId ? 'Restoring…' : 'Restore'}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Supporting tabs — Ledger first, then one tab per service
                     (Water Mitigation, Rebuild, etc.) sourced from the lifecycle
                     views bubbled up by FinancialReportTab, and a "More" tab
@@ -710,7 +754,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                       <Receipt className="h-4 w-4" />
                       Ledger
                     </TabsTrigger>
-                    {lifecycleViews.map((v) => (
+                    {activeLifecycleViews.map((v) => (
                       <TabsTrigger
                         key={v.moduleRecordId}
                         value={v.moduleRecordId}
@@ -741,7 +785,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                     </div>
                   </TabsContent>
 
-                  {lifecycleViews.map((v) => {
+                  {activeLifecycleViews.map((v) => {
                     const serviceExpenses = expenses.filter(
                       (e) => e['Module Record ID'] === v.moduleRecordId,
                     );

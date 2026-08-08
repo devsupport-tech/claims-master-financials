@@ -32,6 +32,7 @@ interface LedgerEntryFormProps {
     Reconciled: boolean
     Notes: string
     Method: string
+    'Module Record ID': string
   }>
 }
 
