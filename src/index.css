@@ -1,6 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+.print-only { display: none; }
+
+@media print {
+  body * { visibility: hidden !important; }
+  .settlement-print-root,
+  .settlement-print-root * { visibility: visible !important; }
+  .settlement-print-root { position: absolute; inset: 0; width: 100%; background: white; color: black; }
+  .settlement-print-root .no-print { display: none !important; }
+  .settlement-print-root .print-only { display: block !important; }
+  .settlement-print-root [data-slot="card"] { break-inside: avoid; box-shadow: none; }
+  @page { size: auto; margin: 12mm; }
+}
+
 @theme {
   --radius: 0.5rem;
 

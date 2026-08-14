@@ -21,6 +21,7 @@ import {
   type FeeType,
   type PartyRole,
 } from '@/services/financial-planning'
+import { SettlementTemplates } from './SettlementTemplates'
 
 const ROLES: PartyRole[] = ['CBRS Group', 'Contractor', 'Referral', 'Fixed']
 const BASES: CalculationBasis[] = ['Approved Revenue', 'Collected Revenue', 'Gross Profit Before Fees']
@@ -78,6 +79,7 @@ export function ContractorTerms() {
         <div><h1 className="text-2xl font-bold">Contractor Terms</h1><p className="mt-1 text-sm text-muted-foreground">Reusable commission and referral defaults. Applying a rule to a claim is always explicit.</p></div>
         <Button onClick={() => edit()}><Plus className="mr-1 h-4 w-4" /> Add rule</Button>
       </div>
+      <SettlementTemplates />
       {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>}
       <Card><CardHeader><CardTitle className="text-base">Fee rules</CardTitle></CardHeader><CardContent>
         {loading ? <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin" />Loading terms…</div> : (

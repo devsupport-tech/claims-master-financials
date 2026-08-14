@@ -77,7 +77,7 @@ export interface FinancialPlanMetrics {
   cashProfit: number;
 }
 
-const FEE_KINDS = new Set(["Commission", "Referral Fee"]);
+const FEE_KINDS = new Set(["Commission", "Referral Fee", "Contractor Settlement"]);
 
 export function money(value: unknown): number {
   const parsed = Number(value ?? 0);

@@ -105,9 +105,9 @@ export function BudgetCommissionsTab({ claimRef, refreshSignal = 0, onChanged }:
   useEffect(() => { void load() }, [load, refreshSignal])
 
   const directExpenses = useMemo(() => plan?.expenses.filter((row) =>
-    row.expenseKind !== 'Commission' && row.expenseKind !== 'Referral Fee') ?? [], [plan])
+    row.expenseKind !== 'Commission' && row.expenseKind !== 'Referral Fee' && row.expenseKind !== 'Contractor Settlement') ?? [], [plan])
   const fees = useMemo(() => plan?.expenses.filter((row) =>
-    row.expenseKind === 'Commission' || row.expenseKind === 'Referral Fee') ?? [], [plan])
+    row.expenseKind === 'Commission' || row.expenseKind === 'Referral Fee' || row.expenseKind === 'Contractor Settlement') ?? [], [plan])
   const unappliedDefaults = plan?.availableTemplates.filter((template) => !template.alreadyApplied) ?? []
 
   async function run(action: () => Promise<void>) {

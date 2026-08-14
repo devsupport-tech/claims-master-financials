@@ -13,5 +13,7 @@ export { ServiceLifecycleCard } from './ServiceLifecycleCard';
 export { ProjectExpensesTable } from './ProjectExpensesTable';
 export { ComparativesCard } from './ComparativesCard';
 export { BudgetCommissionsTab } from './BudgetCommissionsTab';
+export { BudgetSettlementTab } from './BudgetSettlementTab';
+export { ContractorSettlement } from './ContractorSettlement';
 export { ContractorPortfolio } from './ContractorPortfolio';
 export { ContractorTerms } from './ContractorTerms';

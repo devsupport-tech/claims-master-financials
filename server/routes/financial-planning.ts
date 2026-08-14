@@ -12,6 +12,7 @@ import {
   isFeeKind,
   money,
 } from "../lib/financial-calculations.js";
+import { refreshSettlementPaymentStatus } from "./settlements.js";
 
 type JsonObject = Record<string, unknown>;
 type AnyRow = Record<string, any>;
@@ -21,7 +22,7 @@ const router = Router();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BUDGET_CATEGORIES = new Set(["Labor", "Materials", "Subcontractors", "Other"]);
 const EXPENSE_KINDS = new Set([
-  "Labor", "Materials", "Subcontractor", "General", "Commission", "Referral Fee", "Other",
+  "Labor", "Materials", "Subcontractor", "General", "Commission", "Referral Fee", "Contractor Settlement", "Other",
 ]);
 const CALCULATION_MODES = new Set(["Percentage", "Flat", "Manual"]);
 const CALCULATION_BASES = new Set([
@@ -259,6 +260,7 @@ async function buildPlan(claimRef: string) {
     lockedAt: row.locked_at,
     sourceTemplateId: row.source_template_id,
     sourceContractorName: row.source_contractor_name,
+    sourceSettlementId: row.source_settlement_id,
     ...calculation.expenses[row.id],
   }));
 
@@ -680,6 +682,7 @@ router.post("/expenses/:id/payments", handler(async (req) => {
     fields_raw: { "Project Expense": [id] },
   }).select("id").single();
   const payment = unwrap(result, "Cost payment");
+  await refreshSettlementPaymentStatus(expense.source_settlement_id);
   return { id: payment.id, plan: await buildPlan(expense.claim_id) };
 }));
 
@@ -688,6 +691,10 @@ router.delete("/payments/:id", handler(async (req) => {
   const payment = unwrap(await db.from("cost_payments").select("*").eq("id", id).maybeSingle(), "Cost payment");
   const result = await db.from("cost_payments").delete().eq("id", id).select("id").maybeSingle();
   unwrap(result, "Cost payment");
+  if (payment.project_expense_id) {
+    const expenseResult = await db.from("project_expenses").select("source_settlement_id").eq("id", payment.project_expense_id).maybeSingle();
+    if (!expenseResult.error) await refreshSettlementPaymentStatus(expenseResult.data?.source_settlement_id);
+  }
   return { ok: true, id, plan: payment.claim_id ? await buildPlan(payment.claim_id) : null };
 }));
 

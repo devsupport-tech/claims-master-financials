@@ -13,6 +13,7 @@ import { existsSync } from "node:fs";
 
 import { supabaseAdmin } from "./lib/supabase.js";
 import { financialPlanningRouter } from "./routes/financial-planning.js";
+import { settlementRouter } from "./routes/settlements.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3001);
@@ -245,6 +246,7 @@ app.get("/api/claims", asyncRoute(async () => {
 }));
 
 app.use("/api/financial-planning", financialPlanningRouter);
+app.use("/api/financial-planning", settlementRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
