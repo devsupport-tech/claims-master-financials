@@ -13,7 +13,7 @@ import {
   SidebarSearch,
   ServiceLifecycleCard,
   ProjectExpensesTable,
-  BudgetCommissionsTab,
+  BudgetSettlementTab,
   ContractorPortfolio,
   ContractorTerms,
 } from '@/components/financial';
@@ -285,7 +285,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
       setReports(reportsData as AdjusterReport[]);
       setCosts(costsData as JobCost[]);
       setExpenses(financialPlan.expenses
-        .filter((row) => row.expenseKind !== 'Commission' && row.expenseKind !== 'Referral Fee')
+        .filter((row) => row.expenseKind !== 'Commission' && row.expenseKind !== 'Referral Fee' && row.expenseKind !== 'Contractor Settlement')
         .map((row) => ({
           id: row.id,
           'Cost Name': row.name,
@@ -793,7 +793,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                   <TabsList className="flex-wrap h-auto">
                     <TabsTrigger value="budget-commissions" className="flex items-center gap-2">
                       <HandCoins className="h-4 w-4" />
-                      Budget & Commissions
+                      Budget & Settlement
                     </TabsTrigger>
                     <TabsTrigger value="ledger" className="flex items-center gap-2">
                       <Receipt className="h-4 w-4" />
@@ -816,7 +816,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
 
                   {selectedClaim && (
                     <TabsContent value="budget-commissions">
-                      <BudgetCommissionsTab
+                      <BudgetSettlementTab
                         claimRef={selectedClaim.id}
                         refreshSignal={planningRefreshSignal}
                         onChanged={handlePlanningChanged}

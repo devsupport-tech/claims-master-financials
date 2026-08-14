@@ -1,5 +1,15 @@
 # Claims Master Financials — Changelog
 
+## Unreleased — Contractor Settlement Waterfall
+
+- Added cumulative contractor settlements using the agreed collected-revenue → admin fee → company-paid actual costs → compensation split waterfall.
+- Added production-partner, commission-contractor, and referral-only arrangements; configurable referral bases/funders; deductions, reimbursements, advances, and negative contractor carry-forward.
+- Added immutable finalized statements, print/PDF acknowledgment with signature lines, settlement history, reusable contractor templates, and recipient-specific Due obligations.
+- Added automatic Finalized/Paid status synchronization from partial, full, and reversed obligation payments.
+- Added cent-accurate calculation, cumulative snapshot, obligation-allocation, migration, lifecycle, reconciliation, and edge-case tests.
+
+---
+
 ## Latest (`5ac64f7`) — Login, Dark Mode, Collapsible Sidebar & UI Polish
 
 - **Login gate** — Password-protected access via `VITE_DASHBOARD_PASSWORD` env var. Session persists in `sessionStorage`. If no password is set, login is bypassed.

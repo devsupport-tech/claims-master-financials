@@ -2,11 +2,17 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/
 const ROOT = `${API_BASE_URL}/financial-planning`
 
 export type BudgetCategory = 'Labor' | 'Materials' | 'Subcontractors' | 'Other'
-export type ExpenseKind = 'Labor' | 'Materials' | 'Subcontractor' | 'General' | 'Commission' | 'Referral Fee' | 'Other'
+export type ExpenseKind = 'Labor' | 'Materials' | 'Subcontractor' | 'General' | 'Commission' | 'Referral Fee' | 'Contractor Settlement' | 'Other'
 export type FeeType = 'Commission' | 'Referral Fee'
 export type CalculationMode = 'Percentage' | 'Flat' | 'Manual'
 export type CalculationBasis = 'Approved Revenue' | 'Collected Revenue' | 'Gross Profit Before Fees'
 export type PartyRole = 'CBRS Group' | 'Contractor' | 'Referral' | 'Fixed'
+export type CompensationType = 'Production Partner' | 'Commission Contractor' | 'Referral Only'
+export type SettlementStatus = 'Draft' | 'Finalized' | 'Paid' | 'Void'
+export type SettlementReferralBasis = 'Collected Revenue' | 'Revenue After Admin' | 'Net Split Pool' | 'Contractor Share' | 'Fixed Amount'
+export type SettlementCommissionBasis = 'Collected Revenue' | 'Revenue After Admin' | 'Net Split Pool' | 'Gross Profit Before Fees' | 'Fixed Amount'
+export type SettlementReferralPaidBy = 'Company' | 'Contractor' | 'Split'
+export type SettlementLineType = 'Revenue' | 'Company Expense' | 'Contractor Deduction' | 'Contractor Reimbursement' | 'Prior Advance'
 
 export interface BudgetLine {
   id: string
@@ -51,6 +57,7 @@ export interface PlanningExpense {
   lockedAt: string | null
   sourceTemplateId: string | null
   sourceContractorName: string | null
+  sourceSettlementId: string | null
   effectiveAmount: number
   paidAmount: number
   balance: number
@@ -113,6 +120,111 @@ export interface FinancialPlan {
   contractorDefaultsOutdated: boolean
 }
 
+export interface SettlementTerms {
+  compensationType: CompensationType
+  companyName: string
+  contractorName: string | null
+  referralName: string | null
+  adminRatePercent: number
+  adminFixedAmount: number
+  contractorSplitPercent: number
+  companySplitPercent: number
+  commissionCalculationMode: 'Percentage' | 'Flat'
+  commissionBasis: SettlementCommissionBasis
+  commissionRatePercent: number
+  commissionFixedAmount: number
+  referralApplicable: boolean
+  referralBasis: SettlementReferralBasis
+  referralRatePercent: number
+  referralFixedAmount: number
+  referralPaidBy: SettlementReferralPaidBy
+  referralContractorSharePercent: number
+}
+
+export interface SettlementTemplate extends SettlementTerms {
+  id: string
+  contractorName: string
+  label: string
+  active: boolean
+  notes: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ClaimSettlement extends SettlementTerms {
+  id: string
+  claimId: string
+  templateId: string | null
+  settlementNumber: number
+  status: SettlementStatus
+  asOfDate: string
+  notes: string | null
+  finalizedAt: string | null
+  voidedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SettlementLine {
+  id: string
+  settlementId: string
+  lineType: SettlementLineType
+  sourceTable: string | null
+  sourceId: string | null
+  description: string
+  category: string | null
+  payerName: string | null
+  payeeName: string | null
+  amount: number
+  included: boolean
+  exclusionReason: string | null
+  sortOrder: number
+  metadata: Record<string, unknown>
+  lockedByPriorSettlement: boolean
+}
+
+export interface SettlementCalculation {
+  collectedRevenue: number
+  adminFee: number
+  revenueAfterAdmin: number
+  companyExpenses: number
+  grossProfitBeforeFees: number
+  netSplitPool: number
+  contractorGrossShare: number
+  companyGrossShare: number
+  referralBasisAmount: number
+  referralCommission: number
+  contractorReferralShare: number
+  companyReferralShare: number
+  contractorDeductions: number
+  deductionsPayableToCompany: number
+  deductionsPayableToThirdParty: number
+  contractorReimbursements: number
+  priorAdvances: number
+  cumulativeContractorEntitlement: number
+  cumulativeCompanyEntitlement: number
+  cumulativeThirdPartyEntitlement: number
+  priorContractorDistributions: number
+  priorCompanyDistributions: number
+  priorThirdPartyDistributions: number
+  finalContractorPayment: number
+  companyDistribution: number
+  thirdPartyPayments: number
+  contractorCarryForward: number
+  reconciliationDifference: number
+  errors: string[]
+  validForFinalization: boolean
+}
+
+export interface SettlementDetail {
+  settlement: ClaimSettlement
+  claim: { id: string; claimCode: string; customerName: string; address: string; contractor: string | null; referralName: string | null }
+  lines: SettlementLine[]
+  calculation: SettlementCalculation
+  priorSettlements: ClaimSettlement[]
+  legacyFeeConflicts: Array<{ id: string; name: string; expenseKind: string; payeeName: string | null; amount: number; feeState: string | null }>
+}
+
 export interface ContractorSummary {
   contractor: string
   projectCount: number
@@ -162,6 +274,55 @@ export const getFinancialPlan = (claimRef: string) =>
   request<FinancialPlan>(`/claims/${encodeURIComponent(claimRef)}`)
 
 export const getContractorSummary = () => request<ContractorSummary[]>('/contractors')
+
+export const getSettlementTemplates = () => request<SettlementTemplate[]>('/settlement-templates')
+
+export const createSettlementTemplate = (value: Omit<SettlementTemplate, 'id'>) =>
+  request<SettlementTemplate>('/settlement-templates', { method: 'POST', body: body(value) })
+
+export const updateSettlementTemplate = (id: string, value: Omit<SettlementTemplate, 'id'>) =>
+  request<SettlementTemplate>(`/settlement-templates/${id}`, { method: 'PATCH', body: body(value) })
+
+export const deactivateSettlementTemplate = (id: string) =>
+  request<{ ok: boolean }>(`/settlement-templates/${id}`, { method: 'DELETE' })
+
+export const getClaimSettlements = (claimRef: string) =>
+  request<ClaimSettlement[]>(`/claims/${encodeURIComponent(claimRef)}/settlements`)
+
+export const createSettlementDraft = (claimRef: string, value: { templateId?: string; asOfDate?: string } = {}) =>
+  request<SettlementDetail>(`/claims/${encodeURIComponent(claimRef)}/settlements`, { method: 'POST', body: body(value) })
+
+export const getSettlement = (id: string) => request<SettlementDetail>(`/settlements/${id}`)
+
+export const updateSettlement = (id: string, value: Partial<SettlementTerms> & {
+  asOfDate?: string
+  notes?: string | null
+  lines?: Array<Partial<SettlementLine> & { id: string }>
+}) => request<SettlementDetail>(`/settlements/${id}`, { method: 'PATCH', body: body(value) })
+
+export const addSettlementLine = (id: string, value: {
+  lineType: SettlementLineType
+  description: string
+  category?: string
+  payerName?: string
+  payeeName?: string
+  amount: number
+  included?: boolean
+  exclusionReason?: string
+  metadata?: Record<string, unknown>
+}) => request<SettlementDetail>(`/settlements/${id}/lines`, { method: 'POST', body: body(value) })
+
+export const deleteSettlementLine = (id: string) =>
+  request<SettlementDetail>(`/settlement-lines/${id}`, { method: 'DELETE' })
+
+export const deleteSettlementDraft = (id: string) =>
+  request<{ ok: boolean; id: string }>(`/settlements/${id}`, { method: 'DELETE' })
+
+export const finalizeSettlement = (id: string) =>
+  request<SettlementDetail>(`/settlements/${id}/finalize`, { method: 'POST' })
+
+export const voidSettlement = (id: string) =>
+  request<SettlementDetail>(`/settlements/${id}/void`, { method: 'POST' })
 
 export const getFeeTemplates = () => request<FeeTemplate[]>('/templates')
 

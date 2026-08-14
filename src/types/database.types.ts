@@ -6,6 +6,118 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type ContractorSettlementTemplateRow = {
+  active: boolean
+  admin_fixed_amount: number
+  admin_rate_percent: number
+  commission_basis: string
+  commission_calculation_mode: string
+  commission_fixed_amount: number
+  commission_rate_percent: number
+  company_name: string
+  company_split_percent: number
+  compensation_type: string
+  contractor_name: string
+  contractor_split_percent: number
+  created_at: string
+  id: string
+  label: string
+  notes: string | null
+  referral_applicable: boolean
+  referral_basis: string
+  referral_contractor_share_percent: number
+  referral_fixed_amount: number
+  referral_paid_by: string
+  referral_rate_percent: number
+  updated_at: string
+}
+
+export type ContractorSettlementTemplateInsert = Partial<ContractorSettlementTemplateRow> &
+  Pick<ContractorSettlementTemplateRow, "contractor_name" | "label">
+
+export type ClaimSettlementRow = {
+  admin_fee: number
+  admin_fixed_amount: number
+  admin_rate_percent: number
+  as_of_date: string
+  calculation_snapshot: Json
+  collected_revenue: number
+  commission_basis: string
+  commission_calculation_mode: string
+  commission_fixed_amount: number
+  commission_rate_percent: number
+  company_distribution: number
+  company_expenses: number
+  company_gross_share: number
+  company_name: string
+  company_referral_share: number
+  company_split_percent: number
+  compensation_type: string
+  contractor_carry_forward: number
+  contractor_deductions: number
+  contractor_gross_share: number
+  contractor_name: string | null
+  contractor_referral_share: number
+  contractor_reimbursements: number
+  contractor_split_percent: number
+  created_at: string
+  cumulative_company_entitlement: number
+  cumulative_contractor_entitlement: number
+  cumulative_third_party_entitlement: number
+  final_contractor_payment: number
+  finalized_at: string | null
+  id: string
+  net_split_pool: number
+  notes: string | null
+  prior_advances: number
+  prior_company_distributions: number
+  prior_contractor_distributions: number
+  prior_third_party_distributions: number
+  reconciliation_difference: number
+  referral_applicable: boolean
+  referral_basis: string
+  referral_commission: number
+  referral_contractor_share_percent: number
+  referral_fixed_amount: number
+  referral_name: string | null
+  referral_paid_by: string
+  referral_rate_percent: number
+  revenue_after_admin: number
+  settlement_number: number
+  status: string
+  template_id: string | null
+  terms_snapshot: Json
+  third_party_payments: number
+  updated_at: string
+  voided_at: string | null
+  claim_id: string
+}
+
+export type ClaimSettlementInsert = Partial<ClaimSettlementRow> &
+  Pick<ClaimSettlementRow, "claim_id" | "settlement_number" | "compensation_type">
+
+export type ClaimSettlementLineRow = {
+  amount: number
+  category: string | null
+  created_at: string
+  description: string
+  exclusion_reason: string | null
+  id: string
+  included: boolean
+  line_type: string
+  metadata: Json
+  payee_name: string | null
+  payer_name: string | null
+  settlement_id: string
+  sort_order: number
+  source_id: string | null
+  source_table: string | null
+  updated_at: string
+}
+
+export type ClaimSettlementLineInsert = Partial<ClaimSettlementLineRow> &
+  Pick<ClaimSettlementLineRow, "settlement_id" | "line_type" | "description">
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -432,6 +544,41 @@ export type Database = {
         }
         Relationships: []
       }
+      claim_settlement_lines: {
+        Row: ClaimSettlementLineRow
+        Insert: ClaimSettlementLineInsert
+        Update: Partial<ClaimSettlementLineInsert>
+        Relationships: [
+          {
+            foreignKeyName: "claim_settlement_lines_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "claim_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      claim_settlements: {
+        Row: ClaimSettlementRow
+        Insert: ClaimSettlementInsert
+        Update: Partial<ClaimSettlementInsert>
+        Relationships: [
+          {
+            foreignKeyName: "claim_settlements_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claim_settlements_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_settlement_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contractor_fee_templates: {
         Row: {
           active: boolean
@@ -487,6 +634,12 @@ export type Database = {
           rate_percent?: number | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      contractor_settlement_templates: {
+        Row: ContractorSettlementTemplateRow
+        Insert: ContractorSettlementTemplateInsert
+        Update: Partial<ContractorSettlementTemplateInsert>
         Relationships: []
       }
       cost_budget_lines: {
@@ -1343,6 +1496,7 @@ export type Database = {
           reimbursable: boolean | null
           scope_notes: string | null
           source_contractor_name: string | null
+          source_settlement_id: string | null
           source_template_id: string | null
           updated_at: string | null
           vendor: string | null
@@ -1375,6 +1529,7 @@ export type Database = {
           reimbursable?: boolean | null
           scope_notes?: string | null
           source_contractor_name?: string | null
+          source_settlement_id?: string | null
           source_template_id?: string | null
           updated_at?: string | null
           vendor?: string | null
@@ -1407,6 +1562,7 @@ export type Database = {
           reimbursable?: boolean | null
           scope_notes?: string | null
           source_contractor_name?: string | null
+          source_settlement_id?: string | null
           source_template_id?: string | null
           updated_at?: string | null
           vendor?: string | null
@@ -1424,6 +1580,13 @@ export type Database = {
             columns: ["module_id"]
             isOneToOne: false
             referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_expenses_source_settlement_id_fkey"
+            columns: ["source_settlement_id"]
+            isOneToOne: false
+            referencedRelation: "claim_settlements"
             referencedColumns: ["id"]
           },
           {
@@ -1807,6 +1970,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      finalize_claim_settlement: {
+        Args: {
+          p_calculation_snapshot: Json
+          p_obligations?: Json
+          p_settlement_id: string
+          p_terms_snapshot: Json
+        }
+        Returns: Json
+      }
+      refresh_claim_settlement_payment_status: {
+        Args: { p_settlement_id: string }
+        Returns: undefined
+      }
       remove_or_archive_service: {
         Args: { p_module_id: string }
         Returns: Json
@@ -1831,6 +2007,10 @@ export type Database = {
           p_module_id: string
           p_supplement_status?: string
         }
+        Returns: Json
+      }
+      void_claim_settlement: {
+        Args: { p_settlement_id: string }
         Returns: Json
       }
     }
