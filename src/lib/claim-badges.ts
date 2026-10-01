@@ -11,6 +11,12 @@
 export function getStageColor(stage: string): string {
   const colors: Record<string, string> = {
     'Claim Filed': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    'Inspection': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+    'HOLD': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    'EMS': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    'Estimating': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    'Ongoing Services': 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+    'Job Completed': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     'Initial Inspection': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
     'Emergency Services': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     'Adjuster Meeting': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
@@ -31,9 +37,12 @@ export function getStageColor(stage: string): string {
 
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
+    'In progress': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
     'Active': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    'Todo': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     'On Hold': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     'Closed': 'bg-muted text-muted-foreground',
+    'Done': 'bg-muted text-muted-foreground',
     'Pending': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     'Paid': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
     'Invoiced': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',

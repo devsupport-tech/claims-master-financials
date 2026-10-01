@@ -32,6 +32,8 @@ interface ClaimRow {
   policy_number?: string | null;
   loss_date?: string | null;
   loss_type?: string | null;
+  damage_category?: string | null;
+  damage_class?: string | null;
   status?: string | null;
   stage?: string | null;
   rcv?: number | null;
@@ -53,6 +55,7 @@ interface ClaimRow {
   referral_email?: string | null;
   referral_notes?: string | null;
   contractor?: string | null;
+  assignee?: string | null;
   total_payout?: number | null;
   total_outstanding_payments?: number | null;
   net_claim_sum?: number | null;
@@ -116,6 +119,8 @@ function mapClaimMaster(row: ClaimRow): ClaimMaster {
     'Policy Number': row.policy_number ?? '',
     'Loss Date': row.loss_date ?? '',
     'Loss Type': row.loss_type ?? '',
+    'Damage Category': row.damage_category ?? 'Not applicable',
+    'Damage Class': row.damage_class ?? 'Not applicable',
     Status: row.status ?? '',
     Stage: row.stage ?? '',
     RCV: row.rcv ?? 0,
@@ -137,6 +142,7 @@ function mapClaimMaster(row: ClaimRow): ClaimMaster {
     'Referral Email': row.referral_email || undefined,
     'Referral Notes': row.referral_notes || undefined,
     Contractor: row.contractor || undefined,
+    Assignee: row.assignee || undefined,
     'Mortgage Company': mortgageCompanyFromJson(row.mortgage),
     'Total Payout': row.total_payout ?? 0,
     'Total Outstanding Payments': row.total_outstanding_payments ?? 0,

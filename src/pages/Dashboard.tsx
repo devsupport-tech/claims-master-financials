@@ -723,6 +723,8 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                         'Carrier Claim #': selectedClaim['Carrier Claim #'],
                         'Loss Type': selectedClaim['Loss Type'],
                         'Loss Date': selectedClaim['Loss Date'],
+                        'Damage Category': selectedClaim['Damage Category'],
+                        'Damage Class': selectedClaim['Damage Class'],
                         'Adjuster Name': selectedClaim['Adjuster Name'],
                         'Adjuster Email': selectedClaim['Adjuster Email'],
                         'Customer Email': selectedClaim['Customer Email'],
@@ -736,7 +738,10 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                         'Referral Phone': selectedClaim['Referral Phone'],
                         'Referral Email': selectedClaim['Referral Email'],
                         'Referral Notes': selectedClaim['Referral Notes'],
+                        Contractor: selectedClaim.Contractor,
+                        Assignee: selectedClaim.Assignee,
                       }}
+                      contractorLabel={BRANDING_LABEL.toLowerCase() === 'cbrs' ? 'Contractor' : 'Referred By'}
                     />
                   </>
                 )}
@@ -755,7 +760,7 @@ export function Dashboard({ isDark, onThemeToggle }: DashboardProps) {
                   />
                 )}
 
-                {/* Single row: Outstanding · Gross Profit · Payment Sources · Job Costing. */}
+                {/* Single row: Receivables, Gross Profit, Payment Sources, and Job Costing. */}
                 {summary && <FinancialSummaryCard summary={summary} variant="rest" />}
 
                 {archivedLifecycleViews.length > 0 && (
