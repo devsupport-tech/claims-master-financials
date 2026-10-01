@@ -49,6 +49,9 @@ export interface ClaimMaster {
   'Referral Email'?: string;
   'Referral Notes'?: string;
   Contractor?: string;
+  Assignee?: string;
+  'Damage Category'?: 'Not applicable' | '1' | '2' | '3' | string;
+  'Damage Class'?: 'Not applicable' | '1' | '2' | '3' | string;
   'Mortgage Company': string;
   'Total Payout': number;
   'Total Outstanding Payments': number;

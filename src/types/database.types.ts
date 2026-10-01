@@ -331,6 +331,8 @@ export type Database = {
           last_name: string
           loss_date: string | null
           loss_type: string | null
+          damage_category: string | null
+          damage_class: string | null
           mitigation_approved_amount: number | null
           mitigation_submitted_amount: number | null
           mitigation_submitted_date: string | null
@@ -420,6 +422,8 @@ export type Database = {
           last_name: string
           loss_date?: string | null
           loss_type?: string | null
+          damage_category?: string | null
+          damage_class?: string | null
           mitigation_approved_amount?: number | null
           mitigation_submitted_amount?: number | null
           mitigation_submitted_date?: string | null
@@ -509,6 +513,8 @@ export type Database = {
           last_name?: string
           loss_date?: string | null
           loss_type?: string | null
+          damage_category?: string | null
+          damage_class?: string | null
           mitigation_approved_amount?: number | null
           mitigation_submitted_amount?: number | null
           mitigation_submitted_date?: string | null

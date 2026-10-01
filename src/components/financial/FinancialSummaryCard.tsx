@@ -48,7 +48,7 @@ export function FinancialSummaryCard({ summary, variant = 'full' }: FinancialSum
   const outstandingCard = (
     <Card key="outstanding">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
+        <CardTitle className="text-sm font-medium">Receivables</CardTitle>
         <TrendingDown className="h-4 w-4 text-orange-600" />
       </CardHeader>
       <CardContent>

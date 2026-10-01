@@ -13,18 +13,21 @@ interface ClaimsTableProps {
 }
 
 const stageBadgeVariants: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive'> = {
-  Intake: 'secondary',
-  Estimate: 'default',
-  'Carrier Review': 'warning',
-  Supplement: 'warning',
-  'Active Services': 'success',
-  Closed: 'destructive',
+  'Claim Filed': 'secondary',
+  Inspection: 'default',
+  HOLD: 'warning',
+  EMS: 'destructive',
+  Estimating: 'warning',
+  'Ongoing Services': 'success',
+  'Job Completed': 'success',
 };
 
 const statusBadgeVariants: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive'> = {
   Todo: 'secondary',
   'In progress': 'warning',
   Done: 'success',
+  'On Hold': 'warning',
+  Closed: 'success',
 };
 
 type SortField = 'Claim ID' | 'Last Name' | 'Carrier' | 'Stage' | 'Loss Date' | 'RCV';
