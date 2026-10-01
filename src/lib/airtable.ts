@@ -918,11 +918,15 @@ export async function deleteCostPayment(recordId: string) {
 export async function getClaimFinancialSummary(claimRecordId: string) {
   const [claimRow, ledger, reports, releases, costs] = await Promise.all([
     (async () => {
-      const data = unwrap(
-        await supabase.from('claims').select('*').eq('id', claimRecordId).single(),
-        'getClaimFinancialSummary.claim',
-      );
-      return mapClaim(data as unknown as ClaimRow);
+      // Claims are read through the server-side service-role endpoint. The
+      // public browser client is intentionally restricted by RLS, so a direct
+      // `.single()` query can return no visible row even when the claim exists.
+      const rows = await getClaimRowsFromApi();
+      const data = (rows as unknown as ClaimRow[]).find((row) => row.id === claimRecordId);
+      if (!data) {
+        throw new Error(`Claim ${claimRecordId} was not found`);
+      }
+      return mapClaim(data);
     })(),
     getFinancialLedger(claimRecordId),
     getAdjusterReports(claimRecordId),
