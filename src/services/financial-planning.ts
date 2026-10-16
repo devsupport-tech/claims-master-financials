@@ -1,3 +1,6 @@
+import type { ContractorSummary } from '../types/contractor-summary'
+export type { ContractorSummary } from '../types/contractor-summary'
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '')
 const ROOT = `${API_BASE_URL}/financial-planning`
 
@@ -223,29 +226,6 @@ export interface SettlementDetail {
   calculation: SettlementCalculation
   priorSettlements: ClaimSettlement[]
   legacyFeeConflicts: Array<{ id: string; name: string; expenseKind: string; payeeName: string | null; amount: number; feeState: string | null }>
-}
-
-export interface ContractorSummary {
-  contractor: string
-  projectCount: number
-  approvedRevenue: number
-  collectedRevenue: number
-  budget: number
-  committedCosts: number
-  paidCosts: number
-  feesOwedByContractor: number
-  feesOwedToContractor: number
-  referralBalance: number
-  projectedProfit: number
-  expectedProfit: number
-  claims: Array<{
-    id: string
-    claimCode: string
-    customerName: string
-    approvedRevenue: number
-    projectedProfit: number
-    expectedProfit: number
-  }>
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

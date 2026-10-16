@@ -13,6 +13,8 @@ import {
   money,
 } from "../lib/financial-calculations.js";
 import { refreshSettlementPaymentStatus } from "./settlements.js";
+import { calculationInput } from "../lib/financial-plan-input.js";
+import { loadContractorPortfolio } from "../lib/contractor-portfolio.js";
 
 type JsonObject = Record<string, unknown>;
 type AnyRow = Record<string, any>;
@@ -176,44 +178,6 @@ function expenseCategory(kind: string): string {
     General: "General Expenses and Outflows",
     Other: "Others",
   }[kind] ?? kind;
-}
-
-function calculationInput(
-  claim: AnyRow,
-  jobs: AnyRow[],
-  budgets: AnyRow[],
-  ledger: AnyRow[],
-  expenses: AnyRow[],
-  payments: AnyRow[],
-) {
-  return {
-    claim: { totalApprovedBudget: claim.total_approved_budget, rcv: claim.rcv },
-    services: jobs.map((row) => ({
-      approvedEstimateAmount: row.approved_estimate_amount,
-      hasSupplement: row.has_supplement,
-      supplementApprovedAmount: row.supplement_approved_amount,
-    })),
-    budgets: budgets.map((row) => ({ budgetAmount: row.budget_amount })),
-    ledger: ledger.map((row) => ({
-      amount: row.amount,
-      direction: row.direction,
-      fieldsRaw: row.fields_raw,
-    })),
-    expenses: expenses.map((row) => ({
-      id: row.id,
-      amount: row.amount,
-      expenseKind: row.expense_kind,
-      calculationMode: row.calculation_mode,
-      calculationBasis: row.calculation_basis,
-      ratePercent: row.rate_percent,
-      basisAmount: row.basis_amount,
-      feeState: row.fee_state,
-    })),
-    payments: payments.map((row) => ({
-      projectExpenseId: row.project_expense_id,
-      amount: row.amount,
-    })),
-  };
 }
 
 async function buildPlan(claimRef: string) {
@@ -699,59 +663,7 @@ router.delete("/payments/:id", handler(async (req) => {
 }));
 
 router.get("/contractors", handler(async () => {
-  const claimsResult = await db.from("claims").select("id").not("contractor", "is", null);
-  if (claimsResult.error) throw new Error(claimsResult.error.message);
-  const plans = await Promise.all((claimsResult.data ?? []).map((claim: AnyRow) => buildPlan(claim.id)));
-  const grouped = new Map<string, AnyRow>();
-  for (const plan of plans) {
-    const contractor = text(plan.claim.contractor) ?? "Unassigned";
-    const key = contractor.toLowerCase();
-    const row = grouped.get(key) ?? {
-      contractor,
-      projectCount: 0,
-      approvedRevenue: 0,
-      collectedRevenue: 0,
-      budget: 0,
-      committedCosts: 0,
-      paidCosts: 0,
-      feesOwedByContractor: 0,
-      feesOwedToContractor: 0,
-      referralBalance: 0,
-      projectedProfit: 0,
-      expectedProfit: 0,
-      claims: [],
-    };
-    row.projectCount += 1;
-    row.approvedRevenue = money(row.approvedRevenue + plan.metrics.approvedRevenue);
-    row.collectedRevenue = money(row.collectedRevenue + plan.metrics.collectedRevenue);
-    row.budget = money(row.budget + plan.metrics.budgetedDirectCost);
-    row.committedCosts = money(row.committedCosts + plan.metrics.committedDirectCost);
-    row.paidCosts = money(row.paidCosts + plan.metrics.paidDirectCost);
-    row.projectedProfit = money(row.projectedProfit + plan.metrics.projectedProfit);
-    row.expectedProfit = money(row.expectedProfit + plan.metrics.expectedProfit);
-    for (const expense of plan.expenses) {
-      if (!isFeeKind(expense.expenseKind) || expense.status === "Waived") continue;
-      if (String(expense.payerName ?? "").toLowerCase() === key) {
-        row.feesOwedByContractor = money(row.feesOwedByContractor + expense.balance);
-      }
-      if (String(expense.payeeName ?? "").toLowerCase() === key) {
-        row.feesOwedToContractor = money(row.feesOwedToContractor + expense.balance);
-      }
-      if (expense.expenseKind === "Referral Fee") {
-        row.referralBalance = money(row.referralBalance + expense.balance);
-      }
-    }
-    row.claims.push({
-      id: plan.claim.id,
-      claimCode: plan.claim.claimCode,
-      customerName: plan.claim.customerName,
-      approvedRevenue: plan.metrics.approvedRevenue,
-      projectedProfit: plan.metrics.projectedProfit,
-      expectedProfit: plan.metrics.expectedProfit,
-    });
-    grouped.set(key, row);
-  }
-  return [...grouped.values()].sort((a, b) => a.contractor.localeCompare(b.contractor));
+  return loadContractorPortfolio(db);
 }));
 
 export { router as financialPlanningRouter };
