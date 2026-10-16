@@ -1,0 +1,26 @@
+name: Financials checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc -p server/tsconfig.json
+      - run: npm run build
+      - name: Lint changed financial data loading
+        run: npx eslint server/lib/contractor-portfolio.ts server/lib/contractor-portfolio.test.ts server/lib/financial-plan-input.ts server/routes/financial-planning.ts src/types/contractor-summary.ts src/services/financial-planning.ts scripts/contractor-portfolio-controlled-qa.ts
+      - run: git diff --check
